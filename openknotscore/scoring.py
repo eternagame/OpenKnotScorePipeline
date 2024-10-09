@@ -1,4 +1,6 @@
 import pandas
+import statistics
+from arnie.utils import get_helices
 
 def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3):
     """Calculates an Eterna score for a predicted structure and accompanying reactivity dataset
@@ -218,8 +220,6 @@ def calculateCorrelationCoefficient(structure, data, BLANK_OUT5, BLANK_OUT3, num
         print(structure, data)
     # Use pandas built-in correlation function
     return cc
-
-import statistics
 
 def calculateOpenKnotScore(row, prediction_tags):
     """ Calculates the OpenKnotScore metric for a structure and accompanying data
