@@ -334,6 +334,28 @@ if (predictors.get("shapeknots") and "shapeknots_PRED" not in df.columns):
   print("Processing ShapeKnots")
   df = df.join(df.apply(process_SHAPEKNOTS,axis=1))
 
+def process_rnastructure_SHAPE(row):
+  # Predicted Structure - RNAstructure + SHAPE data
+  start = time.perf_counter()
+  try:
+    seq = row["sequence"]
+    # Set up the reactivity array that will be passed to rnastructure
+    # arnie expects a list of float values; we need to account for the leader region with invalid data,
+    # so we don't provide the reactivity data directly stored in the row
+    reactivities = [0] * len(seq)
+    for index, value in enumerate(row["reactivity"]):
+      reactivities[index+BLANK_OUT5] = value
+
+    structure = mfe(seq, package="rnastructure", shape_signal=reactivities)
+  except Exception as e:
+    print(e)
+    structure = 'x'
+  end = time.perf_counter()
+  return pandas.Series([ structure, end-start], index=['rnastructure+SHAPE_PRED', 'rnastructure+SHAPE_time'])
+if (predictors.get("rnastructure+SHAPE") and "rnastructure+SHAPE_PRED" not in df.columns):
+  print("Processing RNAstructure + SHAPE data")
+  df = df.join(df.apply(process_rnastructure_SHAPE,axis=1))
+
 # Final save with all the predictions
 df.to_pickle(f'{dataDir}/{count:03}.pkl')
 
