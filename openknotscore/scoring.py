@@ -295,5 +295,6 @@ def calculateOpenKnotScore(row, prediction_tags):
     df["ensemble_OKS"] = 0.5*avg_ecs + 0.5*avg_cpq
     df["ensemble_tags"] = [tag.replace("_PRED","") for tag in top_scoring_index]
     df["ensemble_structures"] = row[top_scoring_index].values
+    df["ensemble_structures_ecs"] = top_scoring_by_ecs.values
     
     return df
