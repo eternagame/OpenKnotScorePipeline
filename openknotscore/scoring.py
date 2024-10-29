@@ -284,8 +284,8 @@ def calculateOpenKnotScore(row, prediction_tags):
     # Get ensemble of structures with ECS scores within threshold of the highest-scoring ECS
     top_scoring_by_ecs = row[ecs_tags][row[ecs_tags] >= max_ecs - threshold].sort_values(ascending=False)
     # Get the CPQ scores for the ensemble structures
-    top_scoring_index = [tag.replace("_ECS","_PRED") for tag in top_scoring_by_ecs.index.to_list()]
-    top_scoring_cpq = row[[tag.replace("_PRED","_CPQ") for tag in top_scoring_index]]
+    top_scoring_index = [tag.replace("_ECS","") for tag in top_scoring_by_ecs.index.to_list()]
+    top_scoring_cpq = row[[tag + "_CPQ" for tag in top_scoring_index]]
 
     # Calculate the ensemble OKS score
     avg_ecs = statistics.mean(top_scoring_by_ecs) 
