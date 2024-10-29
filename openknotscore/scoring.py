@@ -91,10 +91,10 @@ def remove_bps_in_blanked_regions(bps, num_res, BLANK_OUT5, BLANK_OUT3):
     filtered_bps = []
     for bp in bps:
         assert bp[0] < bp[1]
-        if (bp[0] <= BLANK_OUT5): continue
-        if (bp[1] <= BLANK_OUT5): continue
-        if (bp[0] > num_res - BLANK_OUT3): continue
-        if (bp[1] > num_res - BLANK_OUT3): continue
+        if (bp[0] < BLANK_OUT5): continue
+        if (bp[1] < BLANK_OUT5): continue
+        if (bp[0] > num_res - BLANK_OUT3 - 1): continue
+        if (bp[1] > num_res - BLANK_OUT3 - 1): continue
         filtered_bps.append(bp)
     return filtered_bps
 
@@ -156,8 +156,8 @@ def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3, fi
     
     for i in crossed_res:
         # Skip if the base index is in a flanking region
-        if i < BLANK_OUT5: continue
-        if i > len(structure) - BLANK_OUT3: continue
+        if i + 1 < BLANK_OUT5: continue
+        if i + 1 > len(structure) - BLANK_OUT3: continue
         
         max_count = max_count + 1
         if ( padded_data[i] < threshold_SHAPE_fixed_pair):
