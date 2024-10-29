@@ -1,8 +1,9 @@
+import re
 import pandas
 import statistics
-from arnie.utils import get_helices
+from arnie.utils import convert_dotbracket_to_bp_list, post_process_struct
 
-def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3):
+def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3, filter_singlets=False):
     """Calculates an Eterna score for a predicted structure and accompanying reactivity dataset
     
     data: a list of reactivity values, normalized from 0 to 1 (~90th percentile)
@@ -27,6 +28,9 @@ def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3):
     # # Check that the structure length matches the length of data values + flanking regions
     # assert len(structure) == len(data) + BLANK_OUT5 + BLANK_OUT3 , f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}"
     
+    if filter_singlets and not re.fullmatch(r'x+', structure):
+        structure = post_process_struct(structure, min_len_helix=2)
+
     # Cutoff values; minimum value threshold of paired or unpaired in SHAPE data
     threshold_SHAPE_fixed = 0.5
     min_SHAPE_fixed = 0.0
@@ -94,7 +98,7 @@ def remove_bps_in_blanked_regions(bps, num_res, BLANK_OUT5, BLANK_OUT3):
         filtered_bps.append(bp)
     return filtered_bps
 
-def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3):
+def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3, filter_singlets=False):
     """Calculates the crossed pair quality score for a DBN structure and accompanying dataset
     
     crossed_pair_score = 
@@ -133,13 +137,10 @@ def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3):
     if (all(failed_structure)):
             return [crossed_pair_score, crossed_pair_quality_score]
 
-    # Remove singlet base pairs
-    stems = get_helices(structure)
-    for stem in stems:
-        if (len(stem) == 1):
-            stems.remove(stem)
-    # Convert the list of helices into a list of base pairs (flatten 3D list to 2D list)
-    bp_list = [item for sublist in stems for item in sublist]
+    if filter_singlets:
+        # Remove singlet base pairs
+        structure = post_process_struct(structure, min_len_helix=2)
+    bp_list = convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True)
     
     # Get indexes for bases in crossed pairs
     crossed_res = identify_crossing_bps(bp_list)
