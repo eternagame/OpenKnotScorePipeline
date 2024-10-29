@@ -65,16 +65,20 @@ def identify_crossing_bps(bps):
     # Check every base pair in the list
     for bp in bps:
         # The first value in the base pair should be less than the second value
-        if (bp[0] < bp[1]):
-            # Now we loop over the list again, grabbing base pairs to compare
-            for next_bp in bps:
-                # This checks whether the original bp and the compared bp cross
-                # If they do, we add base positions to the crossed residue list
-                if (bp[0] < next_bp[0] & next_bp[0] < bp[1] & bp[1] < next_bp[1]) | ( next_bp[0] < bp[0] & bp[0] < next_bp[1] & next_bp[1] < bp[1]):
-                    crossed_res.append(bp[0])
-                    crossed_res.append(bp[1])
-                    crossed_res.append(next_bp[0])
-                    crossed_res.append(next_bp[1])
+        assert bp[0] < bp[1]
+        # Now we loop over the list again, grabbing base pairs to compare
+        for next_bp in bps:
+            # This checks whether the original bp and the compared bp cross
+            # If they do, we add base positions to the crossed residue list
+            if (
+                bp[0] < next_bp[0] and next_bp[0] < bp[1] and bp[1] < next_bp[1]
+            ) or (
+                next_bp[0] < bp[0] and bp[0] < next_bp[1] and next_bp[1] < bp[1]
+            ):
+                crossed_res.append(bp[0])
+                crossed_res.append(bp[1])
+                crossed_res.append(next_bp[0])
+                crossed_res.append(next_bp[1])
                     
     # Returns a unique list, since crossed residues may contain duplicate values
     return list(set(crossed_res)) if len(crossed_res) else []
@@ -82,12 +86,12 @@ def identify_crossing_bps(bps):
 def remove_bps_in_blanked_regions(bps, num_res, BLANK_OUT5, BLANK_OUT3):
     filtered_bps = []
     for bp in bps:
-        if (bp[0] < bp[1]):
-            if (bp[0] <= BLANK_OUT5): continue
-            if (bp[1] <= BLANK_OUT5): continue
-            if (bp[0] > num_res - BLANK_OUT3): continue
-            if (bp[1] > num_res - BLANK_OUT3): continue
-            filtered_bps.append(bp)
+        assert bp[0] < bp[1]
+        if (bp[0] <= BLANK_OUT5): continue
+        if (bp[1] <= BLANK_OUT5): continue
+        if (bp[0] > num_res - BLANK_OUT3): continue
+        if (bp[1] > num_res - BLANK_OUT3): continue
+        filtered_bps.append(bp)
     return filtered_bps
 
 def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3):
