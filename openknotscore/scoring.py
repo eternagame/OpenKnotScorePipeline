@@ -22,10 +22,10 @@ def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3):
         print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}")
         print(structure)
         return
-#     # If the structure being passed in is not a string, exit
-#     assert isinstance(structure, str), f"Structure in dbn notation expected, got: {type(structure)}"
-#     # Check that the structure length matches the length of data values + flanking regions
-#     assert len(structure) == len(data) + BLANK_OUT5 + BLANK_OUT3 , f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}"
+    # # If the structure being passed in is not a string, exit
+    # assert isinstance(structure, str), f"Structure in dbn notation expected, got: {type(structure)}"
+    # # Check that the structure length matches the length of data values + flanking regions
+    # assert len(structure) == len(data) + BLANK_OUT5 + BLANK_OUT3 , f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}"
     
     # Cutoff values; minimum value threshold of paired or unpaired in SHAPE data
     threshold_SHAPE_fixed = 0.5
