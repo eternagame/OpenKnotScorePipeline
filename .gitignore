@@ -1,5 +1,6 @@
 tmp/
 data/
 logs/
+logfile.txt
 venv/
 .venv/
