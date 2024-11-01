@@ -66,7 +66,7 @@ import subprocess as sp
 from subprocess import PIPE
 
 # TODO: Move into arnie_file
-hfold_location = "/home/groups/rhiju/thomask/FoldingAlgorithms/Shapify"
+hfold_location = os.environ['HFOLD_PATH']
 
 ##############################
 # RUN PREDICTORS
@@ -96,7 +96,7 @@ def process_contrafold2(seq):
   # MFE Structure - Contrafold2
   start = time.perf_counter()
   try:
-    structure = mfe(seq, package="contrafold_2", pseudoknots=True, param_file="$SCRATCH/rna-env/predictors/PK/contrafold-se/src/contrafold.params.complementary")
+    structure = mfe(seq, package="contrafold_2", pseudoknots=True, param_file=os.environ['CONTRAFOLD_2_PARAMS_PATH'])
   except Exception as e: 
     print(e)
     structure = 'x'
