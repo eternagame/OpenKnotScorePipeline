@@ -29,6 +29,7 @@ predictors = {
   "spotrna2": False, # Fails
   "shapify-hfold": True,
   "nupack_pk": True,
+  "rnastructure+SHAPE": True, # Requires reactivity data
   "shapeknots": True, # Requires reactivity data
 }
 heuristic_predictions = {
