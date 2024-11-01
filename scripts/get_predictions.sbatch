@@ -6,7 +6,7 @@
 #SBATCH --mail-type=begin        # send email when job begins
 #SBATCH --mail-type=end          # send email when job ends
 #SBATCH --mail-type=fail         # send email if job fails
-#SBATCH --time=1440:00
+#SBATCH --time=1-6:00:00
 #SBATCH --partition=biochem,owners
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=16G
