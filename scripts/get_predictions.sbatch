@@ -58,4 +58,4 @@ export rnastructure_PATH=$L_SCRATCH/rna-env/predictors/RNAstructure/exe
 export DATAPATH=$L_SCRATCH/rna-env/predictors/RNAstructure/data_tables
 export vienna_2_PATH=$L_SCRATCH/rna-env/predictors/M2SEQ/ViennaRNA-2.4.16/src/bin
 
-python3 ./GeneratePredictions.py $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_JOB_NAME
+python3 ./GeneratePredictions.py $SLURM_ARRAY_TASK_ID $SLURM_JOB_NAME

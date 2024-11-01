@@ -41,7 +41,7 @@ heuristic_predictions = {
 # Define path variables
 # We use the job name provided in the SLURM submission script, so make sure the job name you enter
 # is the same as the job name used when you generated the subset data files
-job = int(sys.argv[2])
+job = sys.argv[2]
 dataDir = f'{os.environ["SCRATCH"]}/{job}/data'
 
 # The Sherlock batch array script will pass in a number indicating which job in the array this is
