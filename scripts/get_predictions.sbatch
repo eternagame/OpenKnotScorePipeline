@@ -82,4 +82,4 @@ export DATAPATH=$RNA_ENV/predictors/RNAstructure/data_tables
 # We skip it in the arniefile since arnie will prefer the env var over the arniefile anyways
 export NUPACKHOME=$RNA_ENV/predictors/PK/nupack3.0.6
 
-python3 ./GeneratePredictions.py $SLURM_ARRAY_TASK_ID $SLURM_JOB_NAME
+python3 -u ./GeneratePredictions.py $SLURM_ARRAY_TASK_ID $SLURM_JOB_NAME
