@@ -1,6 +1,8 @@
 import os, sys, time
 import pandas
 import numpy
+import dask
+import dask.dataframe as dd
 
 # Import various prediction functions from arnie
 from arnie.bpps import bpps
@@ -9,6 +11,9 @@ from arnie.pk_predictors import pk_predict
 from arnie.pk_predictors import pk_predict_from_bpp
 
 from arnie.utils import convert_dotbracket_to_bp_list, convert_bp_list_to_dotbracket
+
+# Avoid automatically converting lists into strings when passing through dask
+dask.config.set({"dataframe.convert-string": False})
 
 ##############################
 # SETUP
@@ -37,6 +42,9 @@ heuristic_predictions = {
   'eternafold': True,
   'contrafold_2': True,
 }
+
+# We'll parallelize predictions based on the number of CPUs we have available
+PARALLEL_COMPUTATIONS = len(os.sched_getaffinity(0))
 
 # Define path variables
 # We use the job name provided in the SLURM submission script, so make sure the job name you enter
@@ -88,7 +96,7 @@ def process_vienna2(seq):
   return pandas.Series([ structure, end-start ], index=['vienna2_PRED', 'vienna2_time'])
 if (predictors.get("vienna2") and "vienna2_PRED" not in df.columns):
   print("Processing Vienna MFE")
-  df = df.join(df["sequence"].apply(process_vienna2))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_vienna2, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
 
@@ -104,7 +112,7 @@ def process_contrafold2(seq):
   return pandas.Series([ structure, end-start], index=['contrafold2_PRED', 'contrafold2_time'])
 if (predictors.get("contrafold2") and "contrafold2_PRED" not in df.columns):
   print("Processing Contrafold MFE")
-  df = df.join(df["sequence"].apply(process_contrafold2))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_contrafold2, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
 
@@ -120,7 +128,7 @@ def process_eternafold(seq):
   return pandas.Series([ structure, end-start], index=['eternafold_PRED', 'eternafold_time'])
 if (predictors.get("eternafold") and "eternafold_PRED" not in df.columns):
   print("Processing Eternafold MFE")
-  df = df.join(df["sequence"].apply(process_eternafold))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_eternafold, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
 
@@ -136,7 +144,7 @@ def process_rnastructure(seq):
   return pandas.Series([ structure, end-start], index=['rnastructure_PRED', 'rnastructure_time'])
 if (predictors.get("rnastructure_mfe") and "rnastructure_PRED" not in df.columns):
   print("Processing RNAStructure")
-  df = df.join(df["sequence"].apply(process_rnastructure))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_rnastructure, meta={}).compute())
   # Checkpoint Save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
 
@@ -152,7 +160,7 @@ def process_e2efold(seq):
   return pandas.Series([ structure, end-start], index=['e2efold_PRED', 'e2efold_time'])
 if (predictors.get("e2efold") and "e2efold_PRED" not in df.columns):
   print("Processing e2efold")
-  df = df.join(df["sequence"].apply(process_e2efold))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_e2efold, meta={}).compute())
   # Checkpoint Save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
 
@@ -168,7 +176,7 @@ def process_hotknots(seq):
   return pandas.Series([ structure, end-start ], index=['hotknots_PRED', 'hotknots_time'])  
 if (predictors.get("hotknots") and "hotknots_PRED" not in df.columns):
   print("Processing Hotknots")
-  df = df.join(df["sequence"].apply(process_hotknots))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_hotknots, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
 
@@ -184,7 +192,7 @@ def process_ipknots(seq):
   return pandas.Series([ structure, end-start], index=['ipknots_PRED', 'ipknots_time'])
 if (predictors.get("ipknots") and "ipknots_PRED" not in df.columns):
   print("Processing IPKnots")
-  df = df.join(df["sequence"].apply(process_ipknots))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_ipknots, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
     
@@ -200,7 +208,7 @@ def process_knotty(seq):
   return pandas.Series([ structure, end-start], index=['knotty_PRED', 'knotty_time'])
 if (predictors.get("knotty") and "knotty_PRED" not in df.columns):
   print("Processing Knotty")
-  df = df.join(df["sequence"].apply(process_knotty))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_knotty, meta={}).compute())
   # Checkpoint Save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
     
@@ -216,7 +224,7 @@ def process_pknots(seq):
   return pandas.Series([ structure, end-start], index=['pknots_PRED', 'pknots_time'])
 if (predictors.get("pknots") and "pknots_PRED" not in df.columns):
   print("Processing PKnots")
-  df = df.join(df["sequence"].apply(process_pknots))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_pknots, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
     
@@ -232,7 +240,7 @@ def process_spotrna(seq):
   return pandas.Series([ structure, end-start], index=['spotrna_PRED', 'spotrna_time'])
 if (predictors.get("spotrna") and "spotrna_PRED" not in df.columns):
   print("Processing SpotRNA")
-  df = df.join(df["sequence"].apply(process_spotrna))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_spotrna, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
     
@@ -248,7 +256,7 @@ def process_spotrna2(seq):
   return pandas.Series([ structure, end-start], index=['spotrna2_PRED', 'spotrna2_time'])
 if (predictors.get("spotrna2") and "spotrna2_PRED" not in df.columns):
   print("Processing SpotRNA2")
-  df = df.join(df["sequence"].apply(process_spotrna2))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_spotrna2, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
     
@@ -264,7 +272,7 @@ def process_nupack_pk(seq):
   return pandas.Series([ structure, end-start], index=['nupack_pk_PRED', 'nupack_pk_time'])
 if (predictors.get("nupack_pk") and "nupack_pk_PRED" not in df.columns):
   print("Processing NuPACK-PK")
-  df = df.join(df["sequence"].apply(process_nupack_pk))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_nupack_pk, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
     
@@ -284,7 +292,7 @@ def process_heuristic(seq, package):
 
 for package in heuristic_predictions.keys():
   if (heuristic_predictions[package] and f"{package}.TK_PRED" not in df.columns):
-    df = df.join(df["sequence"].apply(process_heuristic, args=(package,)))
+    df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_heuristic, args=(package,), meta={}).compute())
     # Checkpoint save
     df.to_pickle(f'{dataDir}/{count:03}.pkl')
         
@@ -307,7 +315,7 @@ def process_shapify(seq):
   return pandas.Series([ structure, end-start], index=['shapify-hfold_PRED', 'shapify-hfold_time'])
 if (predictors.get("shapify-hfold") and "shapify-hfold_PRED" not in df.columns):
   print("Processing Shapify-HFold")
-  df = df.join(df["sequence"].apply(process_shapify))
+  df = df.join(dd.from_pandas(df["sequence"], npartitions=PARALLEL_COMPUTATIONS).apply(process_shapify, meta={}).compute())
   # Checkpoint save
   df.to_pickle(f'{dataDir}/{count:03}.pkl')
     
@@ -333,7 +341,7 @@ def process_SHAPEKNOTS(row):
   return pandas.Series([ structure, end-start], index=['shapeknots_PRED', 'shapeknots_time'])
 if (predictors.get("shapeknots") and "shapeknots_PRED" not in df.columns):
   print("Processing ShapeKnots")
-  df = df.join(df.apply(process_SHAPEKNOTS,axis=1))
+  df = df.join(dd.from_pandas(df, npartitions=PARALLEL_COMPUTATIONS).apply(process_SHAPEKNOTS, axis=1, meta={}).compute())
 
 def process_rnastructure_SHAPE(row):
   # Predicted Structure - RNAstructure + SHAPE data
@@ -355,7 +363,7 @@ def process_rnastructure_SHAPE(row):
   return pandas.Series([ structure, end-start], index=['rnastructure+SHAPE_PRED', 'rnastructure+SHAPE_time'])
 if (predictors.get("rnastructure+SHAPE") and "rnastructure+SHAPE_PRED" not in df.columns):
   print("Processing RNAstructure + SHAPE data")
-  df = df.join(df.apply(process_rnastructure_SHAPE,axis=1))
+  df = df.join(dd.from_pandas(df, npartitions=PARALLEL_COMPUTATIONS).apply(process_rnastructure_SHAPE, axis=1, meta={}).compute())
 
 # Final save with all the predictions
 df.to_pickle(f'{dataDir}/{count:03}.pkl')
