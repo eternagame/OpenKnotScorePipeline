@@ -64,10 +64,6 @@ df["sequence"] = df["sequence"].apply(lambda x : x.strip())
 if type(df["reactivity"].iloc[0]) == str:
   df["reactivity"] = df["reactivity"].apply(lambda x : numpy.fromstring(x[1:-1], sep=','))
 
-# Define BLANK_OUT5 and BLANK_OUT3 variables
-BLANK_OUT5 = 26
-BLANK_OUT3 = len(df["sequence"].iloc[0]) - BLANK_OUT5 - len(df["reactivity"].iloc[0])
-
 # For HFold; unnecessary once HFold is moved to arnie
 import re
 import subprocess as sp
@@ -331,7 +327,7 @@ def process_SHAPEKNOTS(row):
     # so we don't provide the reactivity data directly stored in the row
     reactivities = [0] * len(seq)
     for index, value in enumerate(row["reactivity"]):
-      reactivities[index+BLANK_OUT5] = value
+      reactivities[index+row['blank_out5']] = value
 
     structure = mfe(seq, package="rnastructure", shape_signal=reactivities, pseudo=True)
   except Exception as e:
@@ -353,7 +349,7 @@ def process_rnastructure_SHAPE(row):
     # so we don't provide the reactivity data directly stored in the row
     reactivities = [0] * len(seq)
     for index, value in enumerate(row["reactivity"]):
-      reactivities[index+BLANK_OUT5] = value
+      reactivities[index+row['blank_out5']] = value
 
     structure = mfe(seq, package="rnastructure", shape_signal=reactivities)
   except Exception as e:
