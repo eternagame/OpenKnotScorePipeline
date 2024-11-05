@@ -4,3 +4,4 @@ logs/
 logfile.txt
 venv/
 .venv/
+.vscode/
