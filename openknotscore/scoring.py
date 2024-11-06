@@ -224,23 +224,8 @@ def calculateOpenKnotScore(row, prediction_tags):
 
     row: a pandas dataframe row containing the data for a single sequence including
       - DBN structures 
-    
-    data: [Ndesign x Nres x Ncond] Reactivity matrix. Assume last of Ncond has
-    SHAPE data.
-    structure:[Ndesign x Nres x Npackages] 0/1 map
-        of paired/unpaired for each predicted structure
-    good_idx = [list of integers] index of designs to use for correlation
-        coefficients
-    BLANK_OUT5 = gray out this number of 5' residues
-    BLANK_OUT3 = gray out this number of 3' residues 
-    corr_type  = correlation coefficient type (default:'Pearson')
-    num_show   = number of top algorithms to show (default: all)
-    clip       = maximum value to clip at [Default no clipping]
-
-    Outputs
-        all_corr_coef = [Npackages] correlation coefficients for each package
-        pkg_sort_idx = [Npackages] permutation of package indices that sort from best to
-            worst by correlation coefficient
+    prediction_tags: names of predictors (as present in row) to include in scoring
+    scoring_region_length: length in nucleotides of the region that was scored
     """
 
     ecs_tags = [f"{tag}_ECS" for tag in prediction_tags]
@@ -272,7 +257,7 @@ def calculateOpenKnotScore(row, prediction_tags):
     # The OKS ensemble is all predictions with ECS scores within a given cutoff of 
     # the highest-scoring ECS. Essentially, all these predictions are close matches to 
     # the reactivity data.
-    threshold = 2.5;
+    threshold = min(5, 5*100/(1 + row['score_end_idx'] - row['score_start_idx']))
     max_ecs = max(row[ecs_tags])
     # Get ensemble of structures with ECS scores within threshold of the highest-scoring ECS
     top_scoring_by_ecs = row[ecs_tags][row[ecs_tags] >= max_ecs - threshold].sort_values(ascending=False)
