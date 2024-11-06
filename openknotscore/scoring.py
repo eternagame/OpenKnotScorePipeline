@@ -3,13 +3,13 @@ import pandas
 import statistics
 from arnie.utils import convert_dotbracket_to_bp_list, post_process_struct
 
-def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3, filter_singlets=False):
+def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx, filter_singlets=False):
     """Calculates an Eterna score for a predicted structure and accompanying reactivity dataset
     
     data: a list of reactivity values, normalized from 0 to 1 (~90th percentile)
     structure: a list of predicted values in dot bracket notation
-    BLANK_OUT5: gray out this number of 5' residues
-    BLANK_OUT3: gray out this nymber of 3' residues
+    score_start_idx: index of data to start scoring from
+    score_end_idx: index of data to end scoring at
     """
     
     if not isinstance(structure, str):
@@ -19,14 +19,10 @@ def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3, filter_
         print(f"List of reactivity values expected, got: {type(data)}")
         print(data)
         return
-    if len(structure) != len(data) + BLANK_OUT5 + BLANK_OUT3:
-        print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}")
+    if len(structure) != len(data):
+        print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)}")
         print(structure)
         return
-    # # If the structure being passed in is not a string, exit
-    # assert isinstance(structure, str), f"Structure in dbn notation expected, got: {type(structure)}"
-    # # Check that the structure length matches the length of data values + flanking regions
-    # assert len(structure) == len(data) + BLANK_OUT5 + BLANK_OUT3 , f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}"
     
     if filter_singlets and not re.fullmatch(r'x+', structure):
         structure = post_process_struct(structure, min_len_helix=2)
@@ -36,14 +32,12 @@ def calculateEternaClassicScore(structure, data, BLANK_OUT5, BLANK_OUT3, filter_
     min_SHAPE_fixed = 0.0
     
     # Convert the input structure to a binary paired/unpaired list
-    # We only have trustworthy data for the bases in the middle of the sequence
-    # so we skip the blanked regions at the beginning and end
-    prediction = [1 if char == "." else 0 for char in structure][BLANK_OUT5:(len(structure) - BLANK_OUT3)]
+    prediction = [1 if char == "." else 0 for char in structure]
 
     correct_hit = [0] * len(data)
     
     # Loop over each base we are testing for correlation 
-    for i in range(len(data)):
+    for i in range(score_start_idx, score_end_idx+1):
         # If the prediction is the base is unpaired
         if (prediction[i] == 1):
         # We check that the data passes a cutoff, and add it to the correct_hit list if true
@@ -87,18 +81,18 @@ def identify_crossing_bps(bps):
     # Returns a unique list, since crossed residues may contain duplicate values
     return list(set(crossed_res)) if len(crossed_res) else []
 
-def remove_bps_in_blanked_regions(bps, num_res, BLANK_OUT5, BLANK_OUT3):
+def remove_bps_in_unscored_regions(bps, score_start_idx, score_end_idx):
     filtered_bps = []
     for bp in bps:
         assert bp[0] < bp[1]
-        if (bp[0] < BLANK_OUT5): continue
-        if (bp[1] < BLANK_OUT5): continue
-        if (bp[0] > num_res - BLANK_OUT3 - 1): continue
-        if (bp[1] > num_res - BLANK_OUT3 - 1): continue
+        if (bp[0] < score_start_idx): continue
+        if (bp[1] < score_start_idx): continue
+        if (bp[0] > score_end_idx): continue
+        if (bp[1] > score_end_idx): continue
         filtered_bps.append(bp)
     return filtered_bps
 
-def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3, filter_singlets=False):
+def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end_idx, filter_singlets=False):
     """Calculates the crossed pair quality score for a DBN structure and accompanying dataset
     
     crossed_pair_score = 
@@ -111,8 +105,8 @@ def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3, fi
            
     data: [Nres] data, normalized to go from 0 to 1 (~90th percentile)
     structure: string in dot-bracket notation for structure, with pseudoknots
-    BLANK_OUT5: gray out this number of 5' residues
-    BLANK_OUT3: gray out this number of 3' residues
+    score_start_idx: index of data to start scoring from
+    score_end_idx: index of data to end scoring at
     """
     if not isinstance(structure, str):
         print(f"Structure in dbn notation expected, got: {type(structure)}")
@@ -120,11 +114,10 @@ def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3, fi
     if not isinstance(data, list):
         print(f"List of reactivity values expected, got: {type(data)}")
         return
-    if len(structure) != len(data) + BLANK_OUT5 + BLANK_OUT3:
-        print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}")
+    if len(structure) != len(data):
+        print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)}")
+        print(structure)
         return
-
-    padded_data = [float('nan')]*BLANK_OUT5 + data + [float('nan')]*BLANK_OUT3
     
     threshold_SHAPE_fixed_pair = 0.25
     
@@ -146,27 +139,26 @@ def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3, fi
     crossed_res = identify_crossing_bps(bp_list)
 
     # Filter out base pairs that involve residues in the blanked out flanking regions
-    bps_filtered = remove_bps_in_blanked_regions(bp_list, len(structure), BLANK_OUT5, BLANK_OUT3)
+    bps_filtered = remove_bps_in_unscored_regions(bp_list, score_start_idx, score_end_idx)
     crossed_res_filtered = identify_crossing_bps(bps_filtered)
     
     num_crossed_pairs  = 0
     crossed_pair_quality_score = 0 
-    total_cross_res = 0 # Unused?
     max_count = 0
     
     for i in crossed_res:
         # Skip if the base index is in a flanking region
-        if i + 1 < BLANK_OUT5: continue
-        if i + 1 > len(structure) - BLANK_OUT3: continue
+        if i + 1 < score_start_idx: continue
+        if i + 1 > score_end_idx: continue
         
         max_count = max_count + 1
-        if ( padded_data[i] < threshold_SHAPE_fixed_pair):
+        if ( data[i] < threshold_SHAPE_fixed_pair):
             if i in crossed_res_filtered:
                 num_crossed_pairs = num_crossed_pairs + 1
             else:
                 num_crossed_pairs = num_crossed_pairs + 0.5
                 
-    data_region_length = len(data)
+    data_region_length = 1 + score_end_idx - score_start_idx
     # TODO: Explain heuristic
     max_crossed_pairs = 0.7 * max(data_region_length - 20, 20)
     crossed_pair_score = 100 * min( num_crossed_pairs/max_crossed_pairs, 1.0)
@@ -177,7 +169,7 @@ def calculateCrossedPairQualityScore(structure, data, BLANK_OUT5, BLANK_OUT3, fi
     # print(crossed_pair_score, crossed_pair_quality_score)
     return [crossed_pair_score, crossed_pair_quality_score]
 
-def calculateCorrelationCoefficient(structure, data, BLANK_OUT5, BLANK_OUT3, num_show, clip, method = "pearson"): 
+def calculateCorrelationCoefficient(structure, data, score_start_idx, score_end_idx, num_show, clip, method = "pearson"): 
     """ Calculates the correlation coefficient between a given structure and reactivity dataset
     
     data: [Ndesign x Nres x Ncond] Reactivity matrix. Assume last of Ncond has
@@ -186,8 +178,8 @@ def calculateCorrelationCoefficient(structure, data, BLANK_OUT5, BLANK_OUT3, num
         of paired/unpaired for each predicted structure
     good_idx = [list of integers] index of designs to use for correlation
         coefficients
-    BLANK_OUT5 = gray out this number of 5' residues
-    BLANK_OUT3 = gray out this number of 3' residues 
+    score_start_idx: index of data to start scoring from
+    score_end_idx: index of data to end scoring at
     corr_type  = correlation coefficient type (default:'Pearson')
     num_show   = number of top algorithms to show (default: all)
     clip       = maximum value to clip at [Default no clipping]
@@ -208,17 +200,18 @@ def calculateCorrelationCoefficient(structure, data, BLANK_OUT5, BLANK_OUT3, num
     if not isinstance(data, list):
         print(f"List of reactivity values expected, got: {type(data)}")
         return
-    if len(structure) != len(data) + BLANK_OUT5 + BLANK_OUT3:
-        print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)} + {BLANK_OUT5} + {BLANK_OUT3}")
+    if len(structure) != len(data):
+        print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)}")
+        print(structure)
         return
     
     # Convert the input structure to a binary paired/unpaired list
     # We only have trustworthy data for the bases in the middle of the sequence
     # so we skip the blanked regions at the beginning and end
-    prediction = [1 if char == "." else 0 for char in structure][BLANK_OUT5:(len(structure) - BLANK_OUT3)]
+    prediction = [1 if char == "." else 0 for char in structure]
     try:
-        data_df = pandas.Series(data)
-        structure_df = pandas.Series(prediction)
+        data_df = pandas.Series(data[score_start_idx:score_end_idx+1])
+        structure_df = pandas.Series(prediction[score_start_idx:score_end_idx+1])
         cc = data_df.corr(structure_df,method=method.lower())
     except:
         cc = float("nan")

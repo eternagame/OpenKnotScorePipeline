@@ -1,4 +1,4 @@
-import os, sys, time
+import os, sys, time, math
 import pandas
 import numpy
 import dask
@@ -327,7 +327,8 @@ def process_SHAPEKNOTS(row):
     # so we don't provide the reactivity data directly stored in the row
     reactivities = [0] * len(seq)
     for index, value in enumerate(row["reactivity"]):
-      reactivities[index+row['blank_out5']] = value
+      if not math.isnan(value):
+        reactivities[index] = value
 
     structure = mfe(seq, package="rnastructure", shape_signal=reactivities, pseudo=True)
   except Exception as e:
@@ -349,7 +350,8 @@ def process_rnastructure_SHAPE(row):
     # so we don't provide the reactivity data directly stored in the row
     reactivities = [0] * len(seq)
     for index, value in enumerate(row["reactivity"]):
-      reactivities[index+row['blank_out5']] = value
+      if not math.isnan(value):
+        reactivities[index] = value
 
     structure = mfe(seq, package="rnastructure", shape_signal=reactivities)
   except Exception as e:
