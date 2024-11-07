@@ -148,8 +148,8 @@ def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end
     
     for i in crossed_res:
         # Skip if the base index is in a flanking region
-        if i + 1 < score_start_idx: continue
-        if i + 1 > score_end_idx: continue
+        if i < score_start_idx: continue
+        if i > score_end_idx: continue
         
         max_count = max_count + 1
         if ( data[i] < threshold_SHAPE_fixed_pair):
