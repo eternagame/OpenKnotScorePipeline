@@ -22,9 +22,10 @@ def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx,
     if len(structure) != len(data):
         print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)}")
         print(structure)
-        return
+        assert len(structure) < len(data)
+        structure = structure.ljust(len(data))
     
-    if filter_singlets and not re.fullmatch(r'x+', structure):
+    if filter_singlets:
         structure = post_process_struct(structure, min_len_helix=2)
 
     # Cutoff values; minimum value threshold of paired or unpaired in SHAPE data
@@ -119,7 +120,7 @@ def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end
     if len(structure) != len(data):
         print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)}")
         print(structure)
-        return
+        return [0,0]
     
     threshold_SHAPE_fixed_pair = 0.25
     
