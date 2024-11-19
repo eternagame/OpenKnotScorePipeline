@@ -241,7 +241,7 @@ def calculateOpenKnotScore(row, prediction_tags):
         # Grab the ECS score for this model, set OK to None if missing
         if pandas.isna(row[f"{predictor}_ECS"]):
             df[f"{predictor}_OKS"] = None
-            print(f"ERROR: Missing ECS data for {predictor} in row {row['id']}")
+            print(f"ERROR: Missing ECS data for {predictor} in row {row.name}")
         ecs = row[f"{predictor}_ECS"]
         # Grab the CPQ score for this model, set OK to None if missing
         if isinstance(row[f"{predictor}_CPQ"],list):
@@ -251,7 +251,7 @@ def calculateOpenKnotScore(row, prediction_tags):
             df[f"{predictor}_OKS"] = (0.5 * ecs) + (0.5 * cpq)
         else:
             df[f"{predictor}_OKS"] = None
-            print(f"ERROR: Missing CPQ data for {predictor} in row {row['id']}")
+            print(f"ERROR: Missing CPQ data for {predictor} in row {row.name}")
 
     # Generate per-sequence OKS by generating an ensemble of predicted structures
     # The OKS ensemble is all predictions with ECS scores within a given cutoff of 
