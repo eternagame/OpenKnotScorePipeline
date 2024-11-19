@@ -34,23 +34,25 @@ def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx,
     # Convert the input structure to a binary paired/unpaired list
     prediction = [1 if char == "." else 0 for char in structure]
 
-    correct_hit = [0] * len(data)
+    data_scored = data[score_start_idx:score_end_idx+1]
+    prediction_scored = prediction[score_start_idx:score_end_idx+1]
+    correct_hit = [0] * len(data_scored)
     
     # Loop over each base we are testing for correlation 
-    for i in range(score_start_idx, score_end_idx+1):
+    for i in range(len(data_scored)):
         # If the prediction is the base is unpaired
-        if (prediction[i] == 1):
+        if (prediction_scored[i] == 1):
         # We check that the data passes a cutoff, and add it to the correct_hit list if true
-            if (data[i] > (0.25*threshold_SHAPE_fixed + 0.75*min_SHAPE_fixed)):
+            if (data_scored[i] > (0.25*threshold_SHAPE_fixed + 0.75*min_SHAPE_fixed)):
                 correct_hit[i] = 1
         else:
         # The prediction is the base is paired, we check that the data is below the threshold value
-            if (data[i] < threshold_SHAPE_fixed):
+            if (data_scored[i] < threshold_SHAPE_fixed):
                 correct_hit[i] = 1
     
     # To get the eterna score, we sum the correct_hit list to figure out how many predicted bases
     # matched the data, then divide by the total number of scored bases and normalize to 100
-    eterna_score = ( sum(correct_hit) / len(data) ) * 100
+    eterna_score = ( sum(correct_hit) / len(correct_hit) ) * 100
     return eterna_score
 
 def identify_crossing_bps(bps):
