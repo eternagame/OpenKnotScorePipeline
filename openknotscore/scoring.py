@@ -11,7 +11,11 @@ def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx,
     score_start_idx: index of data to start scoring from
     score_end_idx: index of data to end scoring at
     """
-    
+    # Failed or missing - this is not uncommmon and expected in many cases, so we won't
+    # make a lot of noise by printing about it
+    if pandas.isna(structure):
+        return
+
     if not isinstance(structure, str):
         print(f"Structure in dbn notation expected, got: {type(structure)}")
         return
@@ -22,8 +26,7 @@ def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx,
     if len(structure) != len(data):
         print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)}")
         print(structure)
-        assert len(structure) < len(data)
-        structure = structure.ljust(len(data))
+        return
     
     if filter_singlets:
         structure = post_process_struct(structure, min_len_helix=2)
@@ -111,6 +114,11 @@ def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end
     score_start_idx: index of data to start scoring from
     score_end_idx: index of data to end scoring at
     """
+    # Failed or missing - this is not uncommmon and expected in many cases, so we won't
+    # make a lot of noise by printing about it
+    if pandas.isna(structure):
+        return
+    
     if not isinstance(structure, str):
         print(f"Structure in dbn notation expected, got: {type(structure)}")
         return
@@ -120,7 +128,7 @@ def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end
     if len(structure) != len(data):
         print(f"Structure and data array lengths don't match: {len(structure)} != {len(data)}")
         print(structure)
-        return [0,0]
+        return
     
     threshold_SHAPE_fixed_pair = 0.25
     
