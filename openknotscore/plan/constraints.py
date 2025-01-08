@@ -76,7 +76,7 @@ def constrain_queue_memory_to_allocation(factory: ConstraintFactory):
         # Ensure the total memory required by queues does not exceed
         # the available memory
         lambda alloc, queue_memory: queue_memory > alloc.configuration.memory
-    ).penalize_decimal(
+    ).penalize(
         HardSoftDecimalScore.ONE_HARD,
         # We'll penalize in 1GB "chunks" so that memeory overages don't overwhelm the hard score
         lambda alloc, queue_memory: Decimal((queue_memory - alloc.configuration.memory) / 1024 / 1024 / 1024)

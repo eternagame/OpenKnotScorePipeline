@@ -2,6 +2,7 @@ import os
 from os import path
 import re
 import math
+from decimal import Decimal
 from typing import Union
 from dataclasses import dataclass
 from subprocess import run
@@ -27,11 +28,11 @@ class SlurmRunner(Runner):
 
     def _cost(self, config: ComputeConfiguration, runtime: int):
         actual_cores = max(config.cpus, math.ceil(config.memory / self.max_mem_per_core))
-        return (
+        return Decimal((
             actual_cores * self.cpu_cost +
             config.gpus * self.gpu_cost +
             config.memory * self.mem_cost / 1024 / 1024 / 1024
-        ) * runtime
+        ) * runtime)
 
     def run(self, tasks, job_name, config):
         schedule: Schedule = solve(
