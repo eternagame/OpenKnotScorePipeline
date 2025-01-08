@@ -118,7 +118,7 @@ class SlurmRunner(Runner):
         queue_id: int = args[1]
         queue: DBQueue = args[2]
         srun(
-            f'python -c "from openknotscore.runners.runner import Runner; Runner.run_serialized_queue(\'{dbpath}\', {queue_id})"',
+            ['python', '-c', f'from openknotscore.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue_id})'],
             cpus=queue.cpus,
             gpu_cmode='shared' if queue.gpu_id != '' else None,
             cuda_visible_devices=queue.gpu_id if queue.gpu_id != '' else None
@@ -134,7 +134,7 @@ class SlurmRunner(Runner):
                 pool.map(SlurmRunner.srun_queue, args)
 
 def srun(
-    command: str,
+    command: list[str],
     cpus: int = None,
     gpu_cmode: str = None,
     cuda_visible_devices: str = None
@@ -151,7 +151,7 @@ def srun(
     if cuda_visible_devices is not None:
         environ['CUDA_VISIBLE_DEVICES'] = cuda_visible_devices
 
-    args.append(command)
+    args += command
 
     if os.environ.get('OKSP_RUNNER_DRY_RUN') == 'true':
         print(f'DRY RUN SRUN COMMAND: {args}\n')
