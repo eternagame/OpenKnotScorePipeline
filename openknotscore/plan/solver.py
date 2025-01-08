@@ -1,16 +1,9 @@
-from typing import TypeVar
 from abc import ABC, abstractmethod
 import math
-from decimal import Decimal
 from timefold.solver import SolverFactory
-from timefold.solver.config import SolverConfig, ScoreDirectorFactoryConfig, TerminationConfig, Duration
-from .domain import Schedule, Task, ComputeAllocation, ComputeShard, ResourceConfiguration
+from timefold.solver.config import SolverConfig, ScoreDirectorFactoryConfig, TerminationConfig, TerminationCompositionStyle, Duration
+from .domain import Schedule, Task, TaskQueue, ComputeAllocation, ComputeConfiguration, AccessibleResources
 from .constraints import define_constraints
-
-TaskDetails = TypeVar('TaskDetails')
-
-# TODO: None of the constraints account for the fact we allocate more cores if the requested memory
-# is in excess of mem per core
 
 class MaxAllocations(ABC):
     @abstractmethod
@@ -42,7 +35,7 @@ class ConservativeMaxAllocations(MaxAllocations):
     def calculate(self, tasks: list[Task], max_timeout_secs: int) -> int:
         return math.ceil(
             sum([
-                task.calc_max_utilized_runtime(ResourceConfiguration(1, False)) for task in tasks
+                task.compute_utilized_resources(AccessibleResources(1, False)).max_runtime for task in tasks
             ]) / max_timeout_secs * self.relaxation_ratio
         )
 
@@ -95,36 +88,30 @@ class AcceleratingBlendMaxAllocations(MaxAllocations):
         return  math.ceil(
             a + (b - a) * blend_ratio
         )
-
+    
 def solve(
     tasks: list[Task],
+    compute_configurations: list[ComputeConfiguration],
     soft_max_allocations: int,
-    max_cores: int,
-    cpu_cost: int,
-    allow_gpu: bool,
-    gpu_cost: int,
-    max_mem_per_core_mb: int,
-    mem_mb_cost: int,
-    max_timeout_secs: int,
     hard_max_allocations: MaxAllocations = AcceleratingBlendMaxAllocations(0.005, 2)
 ) -> Schedule:
     solver_factory = SolverFactory.create(
         SolverConfig(
             solution_class=Schedule,
-            entity_class_list=[Task, ResourceConfiguration, ComputeShard],
+            entity_class_list=[Task, TaskQueue, ComputeAllocation, ComputeConfiguration],
             score_director_factory_config=ScoreDirectorFactoryConfig(
                 constraint_provider_function=define_constraints(soft_max_allocations)
             ),
             termination_config=TerminationConfig(
-                spent_limit=Duration(seconds=1)
+                best_score_feasible=True
             )
         )
     )
     solver = solver_factory.build_solver()
 
-    compute_allocations = []
-    compute_shards = []
-    resource_configurations = []
+    max_timeout = max(max(conf.runtime_range) for conf in compute_configurations)
+    max_cpus = max(max(conf.cpu_range) for conf in compute_configurations)
+    max_gpus = max(max(conf.gpu_range) if len(conf.gpu_range) > 0 else 0 for conf in compute_configurations)
 
     # timefold doesn't give us a way to dynamically allocate entities, so we need to pre-instantiate
     # a fixed number of compute allocations to fit jobs into. The absolute worst case would be
@@ -150,27 +137,27 @@ def solve(
     # A lot of this is gut feeling
     concrete_max_allocations = min(
         max(
-            hard_max_allocations.calculate(tasks, max_timeout_secs),
+            hard_max_allocations.calculate(tasks, max_timeout),
             soft_max_allocations,
         ),
         len(tasks)
     )
 
+    compute_allocations = []
+    task_queues = []
     for _ in range(concrete_max_allocations):
-        alloc = ComputeAllocation(max_cores, cpu_cost, allow_gpu, 0, gpu_cost, max_mem_per_core_mb, mem_mb_cost, max_timeout_secs)
-        for _ in range(max_cores):
-            resources = ResourceConfiguration()
-            shard = ComputeShard(resources, alloc)
-            resources.shard = shard
-            alloc.shards.append(shard)
-            compute_shards.append(shard)
-            resource_configurations.append(resources)
+        alloc = ComputeAllocation()
+        for _ in range(max_cpus):
+            queue = TaskQueue(max_cpus=max_cpus, max_gpus=max_gpus)
+            queue.allocation = alloc
+            alloc.queues.append(queue)
+            task_queues.append(queue)
         compute_allocations.append(alloc)
-
+    
     problem = Schedule(
-        tasks,
+        compute_configurations,
         compute_allocations,
-        compute_shards,
-        resource_configurations
+        task_queues,
+        tasks
     )
     return solver.solve(problem)

@@ -1,11 +1,10 @@
-import math
+from decimal import Decimal
 from timefold.solver.score import (
-    HardSoftDecimalScore, ConstraintFactory, ConstraintCollectors, Joiners, BiConstraintStream,
+    HardSoftDecimalScore, ConstraintFactory, ConstraintCollectors, Joiners,
     constraint_provider
 )
-from .domain import Task, ComputeShard, ComputeAllocation
+from .domain import Task, TaskQueue, ComputeAllocation
 
-# TODO: Support a given task requiring a GPU
 def define_constraints(
     soft_max_allocations: int
 ):
@@ -13,77 +12,142 @@ def define_constraints(
     def _define_constraints(factory: ConstraintFactory):
         return [
             # Hard constraints
-            constrain_allocation_max_cores(factory),
-            constrain_allocation_max_gpus(factory),
-            constrain_allocation_max_gpu_mem(factory),
-            constrain_allocation_max_mem(factory),
-            constrain_allocation_max_timeout(factory),
+            constrain_cpus_to_present_tasks(factory),
+            constrain_queue_cores_to_allocation(factory),
+            constrain_queue_memory_to_allocation(factory),
+            constrain_queue_gpu_to_allocation(factory),
+            constrain_queue_gpu_memory_to_gpu(factory),
+            constrain_queue_max_runtime_to_allocation(factory),
             # Soft constraints
             minimize_excess_allocations(factory, soft_max_allocations),
             minimize_max_cost(factory),
+            minimize_avg_cost(factory),
+            minimize_min_cost(factory),
         ]
     return _define_constraints
 
-def constrain_allocation_max_cores(factory: ConstraintFactory):
-    return factory.for_each(
-        ComputeAllocation
+def constrain_cpus_to_present_tasks(factory: ConstraintFactory):
+    # We need to include unassigned since we allow gpu_id to be unassigned
+    return factory.for_each_including_unassigned(
+        TaskQueue
+    ).if_exists(
+        # Timefold may not have assigned this a value yet - that would already be captured
+        # as a negative "init" sore
+        ComputeAllocation,
+        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
     ).filter(
-        lambda allocation: allocation.allocated_cores() > allocation.max_cores
-    ).penalize(
-        HardSoftDecimalScore.ONE_HARD,
-        lambda allocation: allocation.allocated_cores() - allocation.max_cores
-    ).as_constraint('Maximum cores per allocation')
-
-def constrain_allocation_max_gpus(factory: ConstraintFactory):
-    return factory.for_each(
-        ComputeAllocation
-    ).filter(
-        lambda allocation: allocation.requested_gpus > 0 and not allocation.allow_gpu
+        lambda queue: queue.cpus == 0 and len(queue.tasks) > 0
     ).penalize(
         HardSoftDecimalScore.ONE_HARD
-    ).as_constraint('Maximum gpus per allocation')
+    ).as_constraint(
+        'A queue with tasks must have at least one CPU'
+    )
 
-def constrain_allocation_max_gpu_mem(factory: ConstraintFactory):
-    '''
-    Ensure we'd never use more GPU memory than we have access to
-    '''
-    return factory.for_each(
-        ComputeShard
+def constrain_queue_cores_to_allocation(factory: ConstraintFactory):
+    return factory.for_each_including_unassigned(
+        TaskQueue
+    ).if_exists(
+        ComputeAllocation,
+        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
     ).group_by(
-        lambda shard:  shard.allocation,
-        ConstraintCollectors.sum(lambda shard: shard.max_gpu_memory)
+        # Sum CPUs across all queues in an allocation
+        lambda queue: queue.allocation,
+        ConstraintCollectors.sum(lambda queue: queue.cpus)
     ).filter(
-        lambda allocation, total_max_gpu_mem: total_max_gpu_mem > allocation.max_gpu_mem_mb
+        # Ensure the total CPUs required by queues does not exceed
+        # the available CPUs
+        lambda alloc, queue_cpus: queue_cpus > alloc.configuration.cpus
     ).penalize(
         HardSoftDecimalScore.ONE_HARD,
-        lambda allocation, total_max_gpu_mem: total_max_gpu_mem - allocation.max_gpu_mem_mb
-    ).as_constraint('Maximum GPU memory per allocation')
+        lambda alloc, queue_cpus: queue_cpus - alloc.configuration.cpus
+    ).as_constraint('Total queue CPUs <= allocation CPUs')
 
-def constrain_allocation_max_mem(factory: ConstraintFactory):
-    '''
-    Ensure we'd never use more memory than we have access to
-    '''
-    return factory.for_each(
-        ComputeAllocation
+def constrain_queue_memory_to_allocation(factory: ConstraintFactory):
+    return factory.for_each_including_unassigned(
+        TaskQueue
+    ).if_exists(
+        ComputeAllocation,
+        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
+    ).group_by(
+        # Sum memory across all queues in an allocation
+        lambda queue: queue.allocation,
+        ConstraintCollectors.sum(lambda queue: queue.utilized_resources.memory)
     ).filter(
-        lambda allocation: allocation.requested_memory > allocation.max_allocable_mem_mb()
-    ).penalize(
+        # Ensure the total memory required by queues does not exceed
+        # the available memory
+        lambda alloc, queue_memory: queue_memory > alloc.configuration.memory
+    ).penalize_decimal(
         HardSoftDecimalScore.ONE_HARD,
-        lambda allocation: allocation.requested_memory - allocation.max_allocable_mem_mb()
-    ).as_constraint('Maximum memory per allocation')
+        # We'll penalize in 1GB "chunks" so that memeory overages don't overwhelm the hard score
+        lambda alloc, queue_memory: Decimal((queue_memory - alloc.configuration.memory) / 1024 / 1024 / 1024)
+    ).as_constraint('Total queue memory <= allocation memory')
 
-def constrain_allocation_max_timeout(factory: ConstraintFactory):
-    '''
-    Ensure no shard attempts to run longer than the maximum timeout
-    '''
+def constrain_requires_gpu(factory: ConstraintFactory):
     return factory.for_each(
-        ComputeAllocation
+        Task
     ).filter(
-        lambda allocation: allocation.requested_timeout > allocation.max_timeout_secs
+        lambda task: task.requires_gpu and not task.queue.accessible_resources.gpu
+    ).penalize(
+        HardSoftDecimalScore.ONE_HARD
+    ).as_constraint(
+        'GPU available for task requiring GPU'
+    )
+
+def constrain_queue_gpu_to_allocation(factory: ConstraintFactory):
+    return factory.for_each_including_unassigned(
+        TaskQueue
+    ).if_exists(
+        ComputeAllocation,
+        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
+    ).filter(
+        # If the queue is assigned a GPU, make sure it is actually an available GPU
+        # (ie if we have 4 gpus, valid IDs are 0-3)
+        lambda queue: queue.gpu_id is not None and queue.gpu_id <= 0 and queue.gpu_id < queue.allocation.configuration.gpus
     ).penalize(
         HardSoftDecimalScore.ONE_HARD,
-        lambda allocation: allocation.requested_timeout - allocation.max_timeout_secs
-    ).as_constraint('Maximum timeout per allocation')
+        lambda queue: queue.gpu_id - queue.allocation.configuration.gpus if queue.gpu_id > 0 else -queue.gpu_id
+    ).as_constraint('Queue GPU exists in allocation')
+
+def constrain_queue_gpu_memory_to_gpu(factory: ConstraintFactory):
+    return factory.for_each_including_unassigned(
+        TaskQueue
+    ).if_exists(
+        ComputeAllocation,
+        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
+    ).filter(
+        # Only consider queues that actually use a GPU
+        lambda queue: queue.gpu_id is not None
+    ).group_by(
+        # For each allocated GPU, sum the GPU memory
+        lambda queue: (queue.allocation, queue.gpu_id),
+        ConstraintCollectors.sum(lambda queue: queue.utilized_resources.gpu_memory)
+    ).filter(
+        # Check if the memory of all queues allocated to a GPU is more than the total GPU memory
+        lambda gpu, mem: mem > gpu[0].configuration.gpu_memory
+    ).penalize(
+        HardSoftDecimalScore.ONE_HARD,
+        lambda gpu, mem: mem - gpu[0].configuration.gpu_memory
+    ).as_constraint('Total queue GPU memory <= available GPU memory')
+
+def constrain_queue_max_runtime_to_allocation(factory: ConstraintFactory):
+    return factory.for_each_including_unassigned(
+        TaskQueue
+    ).if_exists(
+        ComputeAllocation,
+        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
+    ).group_by(
+        # Get the longest runtime across all queues in an allocation
+        lambda queue: queue.allocation,
+        ConstraintCollectors.max(lambda queue: queue.utilized_resources.max_runtime)
+    ).filter(
+        # Ensure the maximal runtime required by queues does not exceed
+        # the available memory
+        lambda alloc, max_runtime: max_runtime > alloc.configuration.runtime
+    ).penalize(
+        HardSoftDecimalScore.ONE_HARD,
+        # We'll penalize in 1h "chunks" so that runtime overages don't overwhelm the hard score
+        lambda alloc, max_runtime: Decimal((max_runtime - alloc.configuration.runtime) / 60 / 60)
+    ).as_constraint('Max runtime <= allocation runtime')
 
 def minimize_excess_allocations(factory: ConstraintFactory, soft_max_allocations: int):
     '''
@@ -94,7 +158,7 @@ def minimize_excess_allocations(factory: ConstraintFactory, soft_max_allocations
         Task
     ).join(
         ComputeAllocation,
-        Joiners.equal(lambda task: task.shard.allocation, lambda allocation: allocation)
+        Joiners.equal(lambda task: task.queue.allocation, lambda allocation: allocation)
     ).group_by(
         lambda _, allocation: allocation
     ).group_by(
@@ -108,12 +172,42 @@ def minimize_excess_allocations(factory: ConstraintFactory, soft_max_allocations
 
 def minimize_max_cost(factory: ConstraintFactory):
     return factory.for_each(
-        ComputeAllocation
+        Task
+    ).join(
+        ComputeAllocation,
+        Joiners.equal(lambda task: task.queue.allocation, lambda allocation: allocation)
+    ).group_by(
+        # Filter down to just allocations which have a task assigned to them
+        lambda _, allocation: allocation
     ).penalize(
         HardSoftDecimalScore.ONE_SOFT,
-        lambda allocation: (
-            allocation.allocated_cores() * allocation.cpu_cost
-            + allocation.requested_gpus * allocation.gpu_cost
-            + allocation.requested_memory * allocation.mem_mb_cost
-        ) * allocation.requested_timeout
-    ).as_constraint('Minimize cost')
+        lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.max_runtime) 
+    ).as_constraint('Minimize max cost')
+
+def minimize_avg_cost(factory: ConstraintFactory):
+    return factory.for_each(
+        Task
+    ).join(
+        ComputeAllocation,
+        Joiners.equal(lambda task: task.queue.allocation, lambda allocation: allocation)
+    ).group_by(
+        # Filter down to just allocations which have a task assigned to them
+        lambda _, allocation: allocation
+    ).penalize(
+        HardSoftDecimalScore.ONE_SOFT,
+        lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.avg_runtime) 
+    ).as_constraint('Minimize average cost')
+
+def minimize_min_cost(factory: ConstraintFactory):
+    return factory.for_each(
+        Task
+    ).join(
+        ComputeAllocation,
+        Joiners.equal(lambda task: task.queue.allocation, lambda allocation: allocation)
+    ).group_by(
+        # Filter down to just allocations which have a task assigned to them
+        lambda _, allocation: allocation
+    ).penalize(
+        HardSoftDecimalScore.ONE_SOFT,
+        lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.min_runtime) 
+    ).as_constraint('Minimize minimum cost')

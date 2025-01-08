@@ -8,8 +8,8 @@ def load_sources(source_globs: str | list[str]) -> pd.DataFrame:
     Reads source files into a single dataframe
     '''
 
-    _source_globs = [source_globs] if len(source_globs) == 1 else source_globs
-    source_files = itertools.chain([glob.glob(source) for source in _source_globs])
+    _source_globs = [source_globs] if type(source_globs) == str else source_globs
+    source_files = list(itertools.chain.from_iterable(glob.glob(source) for source in _source_globs))
 
     for source in source_files:
         if not source.lower().endswith('rdat'):
@@ -26,7 +26,7 @@ def load_rdat(source_file: str):
         rdat.load(f)
 
 
-    for construct in rdat.constructs:
+    for construct in rdat.constructs.values():
         seqList = []
 
         BLANK_OUT5, BLANK_OUT3 = get_global_blank_out(construct)
@@ -84,7 +84,7 @@ def load_rdat(source_file: str):
             # Add the row to the whole dataframe
             seqList.append(row)
 
-    return pd.DataFrame(seqList, ignore_index=True)
+    return pd.DataFrame(seqList)
 
 def get_global_blank_out(construct):
     assert construct.seqpos == list(range(construct.seqpos[0], construct.seqpos[-1] + 1)), 'RDAT reactivity indicies (SEQPOS) are not contiguous'

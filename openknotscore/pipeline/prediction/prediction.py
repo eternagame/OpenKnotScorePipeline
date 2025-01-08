@@ -1,32 +1,25 @@
 from dataclasses import dataclass
 import pandas as pd
 from .predictors import Predictor
-from ...plan.domain import Task, ResourceConfiguration
+from ...plan.domain import Task, Runnable, AccessibleResources, UtilizedResources
 
 @dataclass
-class PredictionTaskInfo:
+class ResourcePredictor:
     predictor: Predictor
     row: pd.Series
 
-def get_predict_runtime(predictor: Predictor, row: pd.Series):
-    def predict_runtime(resources: ResourceConfiguration):
-        return predictor.approximate_runtime(row['sequence'], resources)
-    return predict_runtime
-
-def get_predict_mem(predictor: Predictor, row: pd.Series):
-    def predict_mem(resources: ResourceConfiguration):
-        return predictor.approximate_memory(row['sequence'], resources)
-    return predict_mem
-
-def get_predict_gpu_mem(predictor: Predictor, row: pd.Series):
-    def predict_gpu_mem(resources: ResourceConfiguration):
-        return predictor.approximate_gpu_memory(row['sequence'])
-    return predict_gpu_mem
+    def predict(self, resources: AccessibleResources):
+        return UtilizedResources(
+            self.predictor.approximate_max_runtime(self.row['sequence'], resources),
+            self.predictor.approximate_avg_runtime(self.row['sequence'], resources),
+            self.predictor.approximate_min_runtime(self.row['sequence'], resources),
+            self.predictor.approximate_max_memory(self.row['sequence'], resources),
+            self.predictor.approximate_max_gpu_memory(self.row['sequence']),
+        )
 
 def get_prediction_task(predictor: Predictor, row: pd.Series):
-    return Task[PredictionTaskInfo](
-        PredictionTaskInfo(predictor, row),
-        get_predict_runtime(predictor, row),
-        get_predict_mem(predictor, row),
-        get_predict_gpu_mem(predictor, row),
+    return Task(
+        Runnable.create(predictor.run)(row['sequence'], row.get('reactivity')),
+        ResourcePredictor(predictor, row).predict,
+        predictor.requires_gpu
     )

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import subprocess
 import re
 import math
-from...plan.domain import ResourceConfiguration
+from...plan.domain import AccessibleResources
 from arnie.utils import convert_dotbracket_to_bp_list, convert_bp_list_to_dotbracket
 try:
     from arnie.mfe import mfe
@@ -39,22 +39,48 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
-    def approximate_runtime(self, seq: str, resources: ResourceConfiguration) -> int:
+    def approximate_min_runtime(self, seq: str, resources: AccessibleResources) -> int:
         '''
-        Returns the approximate upper-bound runtime for computing the prediction for the given
+        Returns the approximate lower-bound runtime for computing the prediction for the given
         sequence, in seconds
+        
+        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
         '''
         pass
 
     @abstractmethod
-    def approximate_memory(self, seq: str, resources: ResourceConfiguration) -> int:
+    def approximate_avg_runtime(self, seq: str, resources: AccessibleResources) -> int:
         '''
-        Returns the approximate upper-bound memory for computing the prediction for the given
-        sequence, in megabytes
+        Returns the approximate average-bound runtime for computing the prediction for the given
+        sequence, in seconds
+        
+        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
         '''
         pass
 
-    def approximate_gpu_memory(self, seq: str) -> int:
+    @abstractmethod
+    def approximate_max_runtime(self, seq: str, resources: AccessibleResources) -> int:
+        '''
+        Returns the approximate upper-bound runtime for computing the prediction for the given
+        sequence, in seconds
+        
+        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
+        '''
+        pass
+
+    @abstractmethod
+    def approximate_max_memory(self, seq: str, resources: AccessibleResources) -> int:
+        '''
+        Returns the approximate upper-bound memory for computing the prediction for the given
+        sequence, in megabytes
+    
+        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
+        '''
+        pass
+
+    supports_gpu = False
+    requires_gpu = False
+    def approximate_max_gpu_memory(self, seq: str) -> int:
         '''
         Returns the approximate upper-bound GPU memory for computing the prediction for the given
         sequence, in megabytes
