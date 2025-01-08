@@ -65,6 +65,6 @@ class OKSPConfig(ABC):
         #     })
         #     .add_heuristic('threshknots', as_name='contrafold_2.TK')
         #     .add_heuristic('hungarian', as_name='contrafold_2.HN')
-        ]
+    ]
 
     runner: Runner = LocalRunner()
