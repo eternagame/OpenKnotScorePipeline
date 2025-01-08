@@ -33,5 +33,9 @@ class Config(OKSPConfig):
         max_gpus=0,
         # Since we need to make sure we have enough memory available for the job to run,
         # we specify the amount of GPU memory that will be requested for GPUs
-        gpu_memory=0
+        gpu_memory=0,
+        # If we were to require a GPU, we'd probably want to add a constraint to ensure
+        # the GPU is of appropriate size. There may also be other requirements for things like
+        # GPU architecture, CPU model for benchmarking, etc
+        constraints=None
     )

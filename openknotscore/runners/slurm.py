@@ -23,8 +23,9 @@ class SlurmRunner(Runner):
     gpu_cost: int | float
     mem_cost: int | float
     '''Per GiB'''
-    max_gpus: int
-    gpu_memory: int
+    max_gpus: int = 0
+    gpu_memory: int = 0
+    constraints: str = None
 
     def _cost(self, config: ComputeConfiguration, runtime: int):
         actual_cores = max(config.cpus, math.ceil(config.memory / self.max_mem_per_core))
@@ -64,6 +65,7 @@ class SlurmRunner(Runner):
                 cpus=comp_config.cpus,
                 gpus=comp_config.gpus if comp_config.gpus > 0 else None,
                 memory_per_node=comp_config.memory,
+                constraint=self.constraints,
                 mail_type='END',
                 array=f'0-{array_size-1}' if array_size > 1 else None,
                 echo_cmd=True
