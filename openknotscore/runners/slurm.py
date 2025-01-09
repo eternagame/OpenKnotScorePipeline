@@ -40,10 +40,10 @@ class SlurmRunner(Runner):
             tasks,
             [
                 ComputeConfiguration(
-                    range(0, self.max_cores + 1),
-                    range(0, self.max_cores * self.max_mem_per_core + 1),
-                    range(0, self.max_gpus + 1),
-                    range(0, self.max_timeout + 1),
+                    self.max_cores,
+                    self.max_cores,
+                    self.max_gpus,
+                    self.max_timeout,
                     self.gpu_memory,
                     self._cost
                 )
@@ -76,10 +76,10 @@ class SlurmRunner(Runner):
             tasks,
             [
                 ComputeConfiguration(
-                    range(0, self.max_cores + 1),
-                    range(0, self.max_cores * self.max_mem_per_core + 1),
-                    range(0, self.max_gpus + 1),
-                    range(0, self.max_timeout + 1),
+                    self.max_cores,
+                    self.max_cores,
+                    self.max_gpus,
+                    self.max_timeout,
                     self.gpu_memory,
                     self._cost
                 )

@@ -109,9 +109,9 @@ def solve(
     )
     solver = solver_factory.build_solver()
 
-    max_timeout = max(max(conf.runtime_range) for conf in compute_configurations)
-    max_cpus = max(max(conf.cpu_range) for conf in compute_configurations)
-    max_gpus = max(max(conf.gpu_range) if len(conf.gpu_range) > 0 else 0 for conf in compute_configurations)
+    max_timeout = max(max(conf.runtime_value_range()) for conf in compute_configurations)
+    max_cpus = max(max(conf.cpu_value_range()) for conf in compute_configurations)
+    max_gpus = max(max(conf.gpu_value_range()) if len(conf.gpu_value_range()) > 0 else 0 for conf in compute_configurations)
 
     # timefold doesn't give us a way to dynamically allocate entities, so we need to pre-instantiate
     # a fixed number of compute allocations to fit jobs into. The absolute worst case would be
