@@ -12,7 +12,6 @@ def define_constraints(
     def _define_constraints(factory: ConstraintFactory):
         return [
             # Hard constraints
-            constrain_cpus_to_present_tasks(factory),
             constrain_queue_cores_to_allocation(factory),
             constrain_queue_memory_to_allocation(factory),
             constrain_queue_gpu_to_allocation(factory),
@@ -26,67 +25,32 @@ def define_constraints(
         ]
     return _define_constraints
 
-def constrain_cpus_to_present_tasks(factory: ConstraintFactory):
-    # We need to include unassigned since we allow gpu_id to be unassigned
-    return factory.for_each_including_unassigned(
-        TaskQueue
-    ).if_exists(
-        # Timefold may not have assigned this a value yet - that would already be captured
-        # as a negative "init" sore
-        ComputeAllocation,
-        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
-    ).filter(
-        lambda queue: queue.cpus == 0 and len(queue.tasks) > 0
-    ).penalize(
-        HardSoftDecimalScore.ONE_HARD
-    ).as_constraint(
-        'A queue with tasks must have at least one CPU'
-    )
-
 def constrain_queue_cores_to_allocation(factory: ConstraintFactory):
-    return factory.for_each_including_unassigned(
-        TaskQueue
-    ).if_exists(
-        ComputeAllocation,
-        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
-    ).group_by(
-        # Sum CPUs across all queues in an allocation
-        lambda queue: queue.allocation,
-        ConstraintCollectors.sum(lambda queue: queue.cpus)
+    return factory.for_each(
+        ComputeAllocation
     ).filter(
-        # Ensure the total CPUs required by queues does not exceed
-        # the available CPUs
-        lambda alloc, queue_cpus: queue_cpus > alloc.configuration.cpus
+        lambda alloc: alloc.utilized_resources.cpus > alloc.configuration.cpus
     ).penalize(
         HardSoftDecimalScore.ONE_HARD,
-        lambda alloc, queue_cpus: queue_cpus - alloc.configuration.cpus
+        lambda alloc: alloc.utilized_resources.cpus - alloc.configuration.cpus
     ).as_constraint('Total queue CPUs <= allocation CPUs')
 
 def constrain_queue_memory_to_allocation(factory: ConstraintFactory):
-    return factory.for_each_including_unassigned(
-        TaskQueue
-    ).if_exists(
-        ComputeAllocation,
-        Joiners.equal(lambda queue: queue.allocation, lambda allocation: allocation)
-    ).group_by(
-        # Sum memory across all queues in an allocation
-        lambda queue: queue.allocation,
-        ConstraintCollectors.sum(lambda queue: queue.utilized_resources.memory)
+    return factory.for_each(
+        ComputeAllocation
     ).filter(
-        # Ensure the total memory required by queues does not exceed
-        # the available memory
-        lambda alloc, queue_memory: queue_memory > alloc.configuration.memory
-    ).penalize(
+        lambda alloc: alloc.utilized_resources.memory > alloc.configuration.memory
+    ).penalize_decimal(
         HardSoftDecimalScore.ONE_HARD,
         # We'll penalize in 1GB "chunks" so that memeory overages don't overwhelm the hard score
-        lambda alloc, queue_memory: Decimal((queue_memory - alloc.configuration.memory) / 1024 / 1024 / 1024)
+        lambda alloc: Decimal((alloc.utilized_resources.memory - alloc.configuration.memory) / 1024 / 1024 / 1024)
     ).as_constraint('Total queue memory <= allocation memory')
 
 def constrain_requires_gpu(factory: ConstraintFactory):
     return factory.for_each(
         Task
     ).filter(
-        lambda task: task.requires_gpu and not task.queue.accessible_resources.gpu
+        lambda task: task.utilized_resources.gpu_memory > 0 and task.queue.gpu_id is None
     ).penalize(
         HardSoftDecimalScore.ONE_HARD
     ).as_constraint(
@@ -143,7 +107,7 @@ def constrain_queue_max_runtime_to_allocation(factory: ConstraintFactory):
         # Ensure the maximal runtime required by queues does not exceed
         # the available memory
         lambda alloc, max_runtime: max_runtime > alloc.configuration.runtime
-    ).penalize(
+    ).penalize_decimal(
         HardSoftDecimalScore.ONE_HARD,
         # We'll penalize in 1h "chunks" so that runtime overages don't overwhelm the hard score
         lambda alloc, max_runtime: Decimal((max_runtime - alloc.configuration.runtime) / 60 / 60)
@@ -172,42 +136,33 @@ def minimize_excess_allocations(factory: ConstraintFactory, soft_max_allocations
 
 def minimize_max_cost(factory: ConstraintFactory):
     return factory.for_each(
-        Task
-    ).join(
-        ComputeAllocation,
-        Joiners.equal(lambda task: task.queue.allocation, lambda allocation: allocation)
-    ).group_by(
-        # Filter down to just allocations which have a task assigned to them
-        lambda _, allocation: allocation
-    ).penalize(
+        ComputeAllocation
+    ).filter(
+        # Only allocations that are non-empty
+        lambda allocation: allocation.utilized_resources.max_runtime > 0
+    ).penalize_decimal(
         HardSoftDecimalScore.ONE_SOFT,
         lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.max_runtime) 
     ).as_constraint('Minimize max cost')
 
 def minimize_avg_cost(factory: ConstraintFactory):
     return factory.for_each(
-        Task
-    ).join(
-        ComputeAllocation,
-        Joiners.equal(lambda task: task.queue.allocation, lambda allocation: allocation)
-    ).group_by(
-        # Filter down to just allocations which have a task assigned to them
-        lambda _, allocation: allocation
-    ).penalize(
+        ComputeAllocation
+    ).filter(
+        # Only allocations that are non-empty
+        lambda allocation: allocation.utilized_resources.max_runtime > 0
+    ).penalize_decimal(
         HardSoftDecimalScore.ONE_SOFT,
         lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.avg_runtime) 
     ).as_constraint('Minimize average cost')
 
 def minimize_min_cost(factory: ConstraintFactory):
     return factory.for_each(
-        Task
-    ).join(
-        ComputeAllocation,
-        Joiners.equal(lambda task: task.queue.allocation, lambda allocation: allocation)
-    ).group_by(
-        # Filter down to just allocations which have a task assigned to them
-        lambda _, allocation: allocation
-    ).penalize(
+        ComputeAllocation
+    ).filter(
+        # Only allocations that are non-empty
+        lambda allocation: allocation.utilized_resources.max_runtime > 0
+    ).penalize_decimal(
         HardSoftDecimalScore.ONE_SOFT,
         lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.min_runtime) 
     ).as_constraint('Minimize minimum cost')

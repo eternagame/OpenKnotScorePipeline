@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 import math
 from timefold.solver import SolverFactory
-from timefold.solver.config import SolverConfig, ScoreDirectorFactoryConfig, TerminationConfig, TerminationCompositionStyle, Duration
-from .domain import Schedule, Task, TaskQueue, ComputeAllocation, ComputeConfiguration, AccessibleResources
+from timefold.solver.config import SolverConfig, ScoreDirectorFactoryConfig, TerminationConfig
+from .domain import Schedule, Task, TaskQueue, ComputeAllocation, ComputeConfiguration
 from .constraints import define_constraints
 
 class MaxAllocations(ABC):
@@ -35,7 +35,7 @@ class ConservativeMaxAllocations(MaxAllocations):
     def calculate(self, tasks: list[Task], max_timeout_secs: int) -> int:
         return math.ceil(
             sum([
-                task.compute_utilized_resources(AccessibleResources(1, False)).max_runtime for task in tasks
+                task.utilized_resources.max_runtime for task in tasks
             ]) / max_timeout_secs * self.relaxation_ratio
         )
 
@@ -148,7 +148,7 @@ def solve(
     for _ in range(concrete_max_allocations):
         alloc = ComputeAllocation()
         for _ in range(max_cpus):
-            queue = TaskQueue(max_cpus=max_cpus, max_gpus=max_gpus)
+            queue = TaskQueue(max_gpus=max_gpus)
             queue.allocation = alloc
             alloc.queues.append(queue)
             task_queues.append(queue)

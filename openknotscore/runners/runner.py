@@ -57,7 +57,7 @@ class Runner(ABC):
                             task_ids.append(task_db.insert(DBTask(func_id, arg_ids, kwarg_ids)))
                         queue_ids.append(queue_db.insert(DBQueue(
                             task_ids,
-                            queue.accessible_resources.cpus,
+                            queue.utilized_resources.cpus,
                             queue.gpu_id
                         )))
                     alloc_ids.append(alloc_db.insert(DBAllocation(queue_ids)))

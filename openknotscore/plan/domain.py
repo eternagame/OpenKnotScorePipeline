@@ -33,21 +33,11 @@ class IdGenerator:
 
 @dataclass(eq=False)
 @deep_planning_clone
-class AccessibleResources:
-    '''
-    Describes the resources that are available when executing a task which may affect
-    utilized resources
-    '''
-
-    cpus: int
-    gpu: bool
-
-@dataclass(eq=False)
-@deep_planning_clone
 class UtilizedResources:
     max_runtime: int
     avg_runtime: int
     min_runtime: int
+    cpus: int
     memory: int
     gpu_memory: int = 0
 
@@ -78,60 +68,50 @@ class Task:
     '''
 
     runnable: Runnable
-    utilized_resources: Callable[[AccessibleResources], UtilizedResources] | UtilizedResources
-    requires_gpu: bool = False
+    utilized_resources: UtilizedResources
 
     queue: Annotated['TaskQueue', PlanningVariable] = None
-
-    def compute_utilized_resources(self, resources: AccessibleResources) -> UtilizedResources:
-        if type(self.utilized_resources) == UtilizedResources:
-            return self.utilized_resources
-        return self.utilized_resources(resources)
 
     id: Annotated[int, PlanningId] = field(default_factory=IdGenerator().generate)
 
     def __repr__(self):
         return f'Task/{str(self.id)}'
 
-class AccessibleResourcesUpdater(VariableListener):
-    def after_variable_changed(self, score_director, _queue) -> None:
-        queue: TaskQueue = _queue
-        score_director.before_variable_changed(queue, 'accessible_resources')
-        queue.accessible_resources = AccessibleResources(queue.cpus, queue.gpu_id is not None)
-        score_director.after_variable_changed(queue, 'accessible_resources')
-
 class TaskAssignmentUtillizedResourcesUpdater(VariableListener):
     # What's with this being a separate function? Something in the timefold
     # python --> java compiler is broken.
     def new_utilization_prechange(self, _task):
         task: Task = _task
-        utilized = task.compute_utilized_resources(task.queue.accessible_resources)
         
         # We're no longer going to be attached to this queue, so our runtime doesn't
         # count toward the total runtime of the queue any more
-        max_runtime = task.queue.utilized_resources.max_runtime - utilized.max_runtime
-        avg_runtime = task.queue.utilized_resources.avg_runtime - utilized.avg_runtime
-        min_runtime = task.queue.utilized_resources.min_runtime - utilized.min_runtime
+        max_runtime = task.queue.utilized_resources.max_runtime - task.utilized_resources.max_runtime
+        avg_runtime = task.queue.utilized_resources.avg_runtime - task.utilized_resources.avg_runtime
+        min_runtime = task.queue.utilized_resources.min_runtime - task.utilized_resources.min_runtime
         
-        # If the maximum RAM/VRAM recorded for the queue is equal to the value
+        # If the maximum CPUs/RAM/VRAM recorded for the queue is equal to the value
         # for this task, that means this task was (or was equal to) the maximum,
         # so since we're no longer a part of the queue we need to find what the next
         # lowest was
-        if task.queue.utilized_resources.memory == utilized.memory:
+        if task.queue.utilized_resources.cpus == task.utilized_resources.cpus:
+            cpus = 0
+            for queue_task in task.queue.tasks:
+                cpus = max(cpus, queue_task.utilized_resources.cpus)
+        else:
+            cpus = task.queue.utilized_resources.cpus
+        if task.queue.utilized_resources.memory == task.utilized_resources.memory:
             max_mem = 0
             for queue_task in task.queue.tasks:
-                qt_utilized = queue_task.compute_utilized_resources(task.queue.accessible_resources)
-                max_mem = max(max_mem, qt_utilized.memory)
+                max_mem = max(max_mem, queue_task.utilized_resources.memory)
         else:
             max_mem = task.queue.utilized_resources.memory
-        if task.queue.utilized_resources.gpu_memory == utilized.gpu_memory:
+        if task.queue.utilized_resources.gpu_memory == task.utilized_resources.gpu_memory:
             max_gpu_mem = 0
             for queue_task in task.queue.tasks:
-                qt_utilized = queue_task.compute_utilized_resources(task.queue.accessible_resources)
-                max_gpu_mem = max(max_gpu_mem, qt_utilized.gpu_memory)
+                max_gpu_mem = max(max_gpu_mem, queue_task.utilized_resources.gpu_memory)
         else:
             max_gpu_mem = task.queue.utilized_resources.gpu_memory
-        return UtilizedResources(max_runtime, avg_runtime, min_runtime, max_mem, max_gpu_mem)
+        return UtilizedResources(max_runtime, avg_runtime, min_runtime, cpus, max_mem, max_gpu_mem)
 
     def before_variable_changed(self, score_director, _task):
         task: Task = _task
@@ -142,26 +122,29 @@ class TaskAssignmentUtillizedResourcesUpdater(VariableListener):
     
     def new_utilization_postchange(self, _task):
         task: Task = _task
-        utilized = task.compute_utilized_resources(task.queue.accessible_resources)
         
         # Extend the queue's total runtime by our task's runtime
-        max_runtime = task.queue.utilized_resources.max_runtime + utilized.max_runtime
-        avg_runtime = task.queue.utilized_resources.avg_runtime + utilized.avg_runtime
-        min_runtime = task.queue.utilized_resources.min_runtime + utilized.min_runtime        
+        max_runtime = task.queue.utilized_resources.max_runtime + task.utilized_resources.max_runtime
+        avg_runtime = task.queue.utilized_resources.avg_runtime + task.utilized_resources.avg_runtime
+        min_runtime = task.queue.utilized_resources.min_runtime + task.utilized_resources.min_runtime        
 
-        # If the maximum RAM/VRAM recorded for the queue is lower than this task,
-            # the max should be the utilization of this task. If it's equal or higher,
-            # it's already correct
-        if task.queue.utilized_resources.memory < utilized.memory:
-            max_memory = utilized.memory
+        # If the maximum CPUs/RAM/VRAM recorded for the queue is lower than this task,
+        # the max should be the utilization of this task. If it's equal or higher,
+        # it's already correct
+        if task.queue.utilized_resources.cpus < task.utilized_resources.cpus:
+            cpus = task.utilized_resources.cpus
+        else:
+            cpus = task.queue.utilized_resources.cpus
+        if task.queue.utilized_resources.memory < task.utilized_resources.memory:
+            max_memory = task.utilized_resources.memory
         else:
             max_memory = task.queue.utilized_resources.memory
-        if task.queue.utilized_resources.gpu_memory < utilized.gpu_memory:
-            max_gpu_memory = utilized.gpu_memory
+        if task.queue.utilized_resources.gpu_memory < task.utilized_resources.gpu_memory:
+            max_gpu_memory = task.utilized_resources.gpu_memory
         else:
             max_gpu_memory = task.queue.utilized_resources.gpu_memory
         
-        return UtilizedResources(max_runtime, avg_runtime, min_runtime, max_memory, max_gpu_memory)
+        return UtilizedResources(max_runtime, avg_runtime, min_runtime, cpus, max_memory, max_gpu_memory)
 
     def after_variable_changed(self, score_director, _task):
         task: Task = _task
@@ -169,25 +152,6 @@ class TaskAssignmentUtillizedResourcesUpdater(VariableListener):
             score_director.before_variable_changed(task.queue, 'utilized_resources')
             task.queue.utilized_resources = self.new_utilization_postchange(task)
             score_director.after_variable_changed(task.queue, 'utilized_resources')
-
-class ResourceChangeUtilizedResourcesUpdater(VariableListener):
-    def new_utilization(self, _queue):
-        queue: TaskQueue = _queue
-        utilized = UtilizedResources(0, 0, 0, 0)
-        for task in queue.tasks:
-            task_utilized = task.compute_utilized_resources(queue.accessible_resources)
-            utilized.max_runtime += task_utilized.max_runtime
-            utilized.avg_runtime += task_utilized.avg_runtime
-            utilized.min_runtime += task_utilized.min_runtime
-            utilized.memory = max(utilized.memory, task_utilized.memory)
-            utilized.gpu_memory = max(utilized.gpu_memory, task_utilized.gpu_memory)
-        return utilized
-
-    def after_variable_changed(self, score_director, _queue):
-        queue: TaskQueue = _queue
-        score_director.before_variable_changed(queue, 'utilized_resources')
-        queue.utilized_resources = self.new_utilization(queue)
-        score_director.after_variable_changed(queue, 'utilized_resources')
 
 @planning_entity
 @dataclass(eq=False)
@@ -199,38 +163,25 @@ class TaskQueue:
     the total capacity of the compute allocation (ie, we constrain the set of tasks such that the most
     "expensive" task in each queue of an allocation could run concurrently).
     '''
-    max_cpus: int
     max_gpus: int
-
-    cpus: Annotated[int, PlanningVariable(value_range_provider_refs=['queue_cpus'])] = 0
-    gpu_id: Annotated[int | None, PlanningVariable(value_range_provider_refs=['queue_gpus'], allows_unassigned=True)] = None
-
-    def get_cpu_range(self) -> Annotated[list[int], ValueRangeProvider(id='queue_cpus')]:
-        return list(range(0, self.max_cpus + 1))
-    
-    def get_gpu_range(self) -> Annotated[list[int], ValueRangeProvider(id='queue_gpus')]:
-        return list(range(0, self.max_gpus))
 
     allocation: 'ComputeAllocation' = None
     tasks: Annotated[list[Task], InverseRelationShadowVariable(source_variable_name='queue')] = field(default_factory=list)
 
-    accessible_resources: Annotated[
-        AccessibleResources,
-        ShadowVariable(source_variable_name='cpus', variable_listener_class=AccessibleResourcesUpdater),
-        ShadowVariable(source_variable_name='gpu_id', variable_listener_class=AccessibleResourcesUpdater),
-    ] = field(default_factory=lambda: AccessibleResources(0, False))
+    gpu_id: Annotated[int | None, PlanningVariable(value_range_provider_refs=['queue_gpus'], allows_unassigned=True)] = None
 
+    def get_gpu_range(self) -> Annotated[list[int], ValueRangeProvider(id='queue_gpus')]:
+        return list(range(0, self.max_gpus))
+    
     utilized_resources: Annotated[
         UtilizedResources,
         ShadowVariable(source_variable_name='queue', source_entity_class=Task, variable_listener_class=TaskAssignmentUtillizedResourcesUpdater),
-        ShadowVariable(source_variable_name='cpus', variable_listener_class=ResourceChangeUtilizedResourcesUpdater),
-        ShadowVariable(source_variable_name='gpu_id', variable_listener_class=ResourceChangeUtilizedResourcesUpdater),
-    ] = field(default_factory=lambda: UtilizedResources(0, 0, 0, 0))
+    ] = field(default_factory=lambda: UtilizedResources(0, 0, 0, 0, 0))
 
     id: Annotated[int, PlanningId] = field(default_factory=IdGenerator().generate)
 
     def __repr__(self):
-        return f'TaskQueue/{str(self.id)}(cpus: {self.cpus}, gpu_id: {self.gpu_id})'
+        return f'TaskQueue/{str(self.id)}(tasks: {len(self.tasks)}, gpu_id: {self.gpu_id})'
     
 class AllocationUtilizedResourcesUpdater(VariableListener):
     def before_variable_changed(self, score_director, _queue) -> None:
@@ -240,9 +191,11 @@ class AllocationUtilizedResourcesUpdater(VariableListener):
             queue.allocation.utilized_resources.max_runtime,
             queue.allocation.utilized_resources.avg_runtime,
             queue.allocation.utilized_resources.min_runtime,
+            queue.allocation.utilized_resources.cpus,
             queue.allocation.utilized_resources.memory,
             queue.allocation.utilized_resources.gpu_memory,
         )
+        new_utilized.cpus -= queue.utilized_resources.cpus
         new_utilized.memory -= queue.utilized_resources.memory
         new_utilized.gpu_memory -= queue.utilized_resources.gpu_memory
         if queue.allocation.utilized_resources.max_runtime == queue.utilized_resources.max_runtime:
@@ -269,9 +222,11 @@ class AllocationUtilizedResourcesUpdater(VariableListener):
             queue.allocation.utilized_resources.max_runtime,
             queue.allocation.utilized_resources.avg_runtime,
             queue.allocation.utilized_resources.min_runtime,
+            queue.allocation.utilized_resources.cpus,
             queue.allocation.utilized_resources.memory,
             queue.allocation.utilized_resources.gpu_memory,
         )
+        new_utilized.cpus += queue.utilized_resources.cpus
         new_utilized.memory += queue.utilized_resources.memory
         # It's a little silly to be adding GPU memory across all GPUs, but for the sake
         # of being able to reuse the same class, we'll do this. We're not actively
@@ -311,7 +266,7 @@ class ComputeAllocation:
     utilized_resources: Annotated[
         UtilizedResources,
         ShadowVariable(source_variable_name='utilized_resources', source_entity_class=TaskQueue, variable_listener_class=AllocationUtilizedResourcesUpdater),
-    ] = field(default_factory=lambda: UtilizedResources(0, 0, 0, 0))
+    ] = field(default_factory=lambda: UtilizedResources(0, 0, 0, 0, 0))
 
     def nonempty_queues(self):
         return list(

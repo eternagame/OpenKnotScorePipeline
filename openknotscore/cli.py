@@ -3,8 +3,6 @@ import importlib
 import os
 import pandas as pd
 from .pipeline.import_source import load_sources
-from .pipeline.prediction import predictors
-from .pipeline.prediction.prediction import get_prediction_task
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
 from .plan.domain import Task, Runnable, UtilizedResources
 from .config import OKSPConfig
@@ -21,8 +19,9 @@ def run_cli():
     subparsers.add_parser('score', help='compute scores using previously generated predictions and export to the final output files')
     subparsers.add_parser('predict-forecast', help='compute the total number of core-hours required for computation and minimum per-job requirements')
     model_parser = subparsers.add_parser('predict-generate-model', help='run predictors with sample inputs and generate resource usage models')
-    model_parser.add_argument('--max-memory', dest='max_memory', help='maximum memory to allocate per predictor, in MB', default=1024*4)
-    model_parser.add_argument('--max-gpu-memory', dest='max_gpu_memory', help='maximum GPU memory to allocate per predictor if it supports GPU, in MB', default=0)
+    model_parser.add_argument('--cpus', dest='cpus', help='cpus to allocate per predictor, in MB (limits not supported for local runner)', default=1)
+    model_parser.add_argument('--max-memory', dest='max_memory', help='maximum memory to allocate per predictor, in MB (limits not supported for local runner)', default=1024*4)
+    model_parser.add_argument('--max-gpu-memory', dest='max_gpu_memory', help='maximum GPU memory to allocate per predictor if it supports GPU, in MB (limits not supported for local runner)', default=0)
 
     args = parser.parse_args()
 
@@ -36,10 +35,10 @@ def run_cli():
                     Runnable.create(generate_predictor_resource_model)(predictor),
                     UtilizedResources(
                         MODEL_TIMEOUT, MODEL_TIMEOUT, MODEL_TIMEOUT,
+                        args.cpus,
                         args.max_memory * 1024 * 1024,
-                        args.max_gpu_memory if predictor.supports_gpu else 0
-                    ),
-                    True if predictor.supports_gpu and args.max_gpu_memory > 0 else False
+                        args.max_gpu_memory if predictor.gpu else 0
+                    )
                 )
                 for predictor in config.enabled_predictors
             ],
@@ -51,7 +50,17 @@ def run_cli():
 
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
             pred_tasks = [
-                get_prediction_task(predictor, row)
+                Task(
+                    Runnable.create(predictor.run)(row['sequence'], row.get('reactivity')),
+                    UtilizedResources(
+                        predictor.approximate_max_runtime(row['sequence']),
+                        predictor.approximate_avg_runtime(row['sequence']),
+                        predictor.approximate_min_runtime(row['sequence']),
+                        predictor.cpus,
+                        predictor.approximate_max_memory(row['sequence']),
+                        predictor.approximate_max_gpu_memory(row['sequence']),
+                    )
+                )
                 for predictor in config.enabled_predictors
                 for _, row in source_data.iterrows()
             ]

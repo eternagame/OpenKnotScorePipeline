@@ -41,7 +41,7 @@ class SlurmRunner(Runner):
             [
                 ComputeConfiguration(
                     self.max_cores,
-                    self.max_cores,
+                    self.max_cores * self.max_mem_per_core,
                     self.max_gpus,
                     self.max_timeout,
                     self.gpu_memory,
@@ -77,7 +77,7 @@ class SlurmRunner(Runner):
             [
                 ComputeConfiguration(
                     self.max_cores,
-                    self.max_cores,
+                    self.max_cores * self.max_mem_per_core,
                     self.max_gpus,
                     self.max_timeout,
                     self.gpu_memory,
@@ -91,11 +91,10 @@ class SlurmRunner(Runner):
         core_seconds = 0
         gpu_seconds = 0
         for task in schedule.tasks:
-            utilized = task.compute_utilized_resources(task.queue.accessible_resources)
-            max_runtime = max(utilized.max_runtime, max_runtime)
-            core_seconds += utilized.max_runtime * task.queue.cpus
+            max_runtime = max(task.utilized_resources.max_runtime, max_runtime)
+            core_seconds += task.utilized_resources.max_runtime * task.queue.utilized_resources.cpus
             if task.queue.gpu_id is not None:
-                gpu_seconds += utilized.max_runtime
+                gpu_seconds += task.utilized_resources.max_runtime
 
         nonempty_allocations = schedule.nonempty_compute_allocations()
 

@@ -1,9 +1,7 @@
 import os
-import subprocess
 from multiprocessing import cpu_count
 from concurrent.futures import ProcessPoolExecutor as Pool
 from dataclasses import dataclass
-from ..plan.domain import AccessibleResources, Task
 from .runner import Runner
 
 # https://github.com/python/cpython/issues/111873#issuecomment-1809135036
@@ -35,16 +33,10 @@ class LocalRunner(Runner):
                 pass
 
     def forecast(self, tasks, config):
-        # This is all very unscientific (tasks may utilize more than one CPU if available,
+        # This is all very unscientific (tasks may utilize an arbitrary number of CPUs,
         # we don't do any checks around having sufficient RAM or VRAM, etc).
         # LocalRunner is not really expected to be used for serious use cases anyways vs testing
         # and quick jobs. Someone may want to improve this later
-        try:
-            subprocess.check_output('nvidia-smi')
-            gpu_available = True
-        except:
-            gpu_available = False
-
-        total_time = sum(task.compute_utilized_resources(AccessibleResources(1, gpu_available)).max_runtime for task in tasks)
+        total_time = sum(task.utilized_resources.max_runtime for task in tasks)
         print(f'Total core-hours: {total_time/60/60: .2f}')
         print(f'Execution time: {total_time/60/60/self.max_processes: .2f} hours')
