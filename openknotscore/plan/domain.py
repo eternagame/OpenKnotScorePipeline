@@ -1,4 +1,4 @@
-from typing import Callable, Annotated, TypeVar, Type, Tuple
+from typing import Callable, Annotated, TypeVar, Type
 from dataclasses import dataclass, field
 from decimal import Decimal
 from timefold.solver.domain import (
@@ -294,16 +294,24 @@ class ComputeConfiguration:
     runtime_range: int | list[int] | range
     # We assume allocated GPUs are homogenious, which is true in all cases I can think of right now
     gpu_memory: int
-    cost: Callable[['ComputeConfiguration', int], int | Decimal] | int | Decimal
+    cost: Callable[
+        [
+            Annotated[int, 'cpus'],
+            Annotated[int, 'gpus'],
+            Annotated[int, 'memory'],
+            Annotated[int, 'runtime']
+        ],
+        int | Decimal
+    ] | int | Decimal
     '''
     Function which takes the current compute configuration and a given runtime
     and returns the cost
     '''
 
-    def compute_cost(self, runtime: int):
+    def compute_cost(self, cpus: int, gpus: int, memory: int, runtime: int):
         if type(self.cost) in [int, Decimal]:
             return self.cost
-        return self.cost(self, runtime)
+        return self.cost(cpus, gpus, memory, runtime)
     
     def cpu_value_range(self) -> Annotated[list[int], ValueRangeProvider(id='config_cpus')]:
         if type(self.cpu_range) == range:

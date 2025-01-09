@@ -7,7 +7,7 @@ from typing import Union
 from dataclasses import dataclass
 from subprocess import run
 from multiprocessing import Pool
-from ..plan.domain import ComputeConfiguration, Schedule
+from ..plan.domain import Schedule, ComputeConfiguration
 from ..plan.solver import solve
 from .runner import Runner, DBComputeConfiguration, DBAllocation, DBQueue
 from ..db import DBReader
@@ -27,12 +27,12 @@ class SlurmRunner(Runner):
     gpu_memory: int = 0
     constraints: str = None
 
-    def _cost(self, config: ComputeConfiguration, runtime: int):
-        actual_cores = max(config.cpus, math.ceil(config.memory / self.max_mem_per_core))
+    def _cost(self, cpus: int, gpus: int, memory: int, runtime: int):
+        actual_cores = max(cpus, math.ceil(memory / self.max_mem_per_core))
         return Decimal((
             actual_cores * self.cpu_cost +
-            config.gpus * self.gpu_cost +
-            config.memory * self.mem_cost / 1024 / 1024 / 1024
+            gpus * self.gpu_cost +
+            memory * self.mem_cost / 1024 / 1024 / 1024
         ) * runtime)
 
     def run(self, tasks, job_name, config):
@@ -44,8 +44,7 @@ class SlurmRunner(Runner):
                     self.max_cores * self.max_mem_per_core,
                     self.max_gpus,
                     self.max_timeout,
-                    self.gpu_memory,
-                    self._cost
+                    self.gpu_memory
                 )
             ],
             self.max_jobs

@@ -142,7 +142,7 @@ def minimize_max_cost(factory: ConstraintFactory):
         lambda allocation: allocation.utilized_resources.max_runtime > 0
     ).penalize_decimal(
         HardSoftDecimalScore.ONE_SOFT,
-        lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.max_runtime) 
+        lambda allocation: allocation.configuration.compute_cost(allocation.configuration.cpus, allocation.configuration.gpus, allocation.configuration.memory, allocation.utilized_resources.max_runtime)
     ).as_constraint('Minimize max cost')
 
 def minimize_avg_cost(factory: ConstraintFactory):
@@ -153,7 +153,7 @@ def minimize_avg_cost(factory: ConstraintFactory):
         lambda allocation: allocation.utilized_resources.max_runtime > 0
     ).penalize_decimal(
         HardSoftDecimalScore.ONE_SOFT,
-        lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.avg_runtime) 
+        lambda allocation: allocation.configuration.compute_cost(allocation.configuration.cpus, allocation.configuration.gpus, allocation.configuration.memory, allocation.utilized_resources.max_runtime)
     ).as_constraint('Minimize average cost')
 
 def minimize_min_cost(factory: ConstraintFactory):
@@ -164,5 +164,5 @@ def minimize_min_cost(factory: ConstraintFactory):
         lambda allocation: allocation.utilized_resources.max_runtime > 0
     ).penalize_decimal(
         HardSoftDecimalScore.ONE_SOFT,
-        lambda allocation: allocation.configuration.compute_cost(allocation.utilized_resources.min_runtime) 
+        lambda allocation: allocation.configuration.compute_cost(allocation.configuration.cpus, allocation.configuration.gpus, allocation.configuration.memory, allocation.utilized_resources.max_runtime)
     ).as_constraint('Minimize minimum cost')
