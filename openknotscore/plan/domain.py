@@ -201,10 +201,10 @@ class ComputeConfiguration:
     more granularly allocate resources, you can specify a range or list of options
     '''
 
-    cpu_range: int | list[int] | range
-    memory_range: int | list[int] | range
-    gpu_range: int | list[int] | range
-    runtime_range: int | list[int] | range
+    cpus: int
+    memory: int
+    gpus: int
+    runtime: int
     # We assume allocated GPUs are homogenious, which is true in all cases I can think of right now
     gpu_memory: int
     cost: Callable[
@@ -225,51 +225,6 @@ class ComputeConfiguration:
         if type(self.cost) in [int, Decimal]:
             return self.cost
         return self.cost(cpus, gpus, memory, runtime)
-    
-    def cpu_value_range(self) -> Annotated[list[int], ValueRangeProvider(id='config_cpus')]:
-        if type(self.cpu_range) == range:
-            return list(self.cpu_range)
-        elif type(self.cpu_range) == int:
-            return [self.cpu_range]
-        else:
-            return self.cpu_range
-    
-    def memory_value_range(self) -> Annotated[list[int], ValueRangeProvider(id='config_memory')]:
-        if type(self.memory_range) == range:
-            if self.memory_range.step == 1:
-                # Because memory would have so many potential values, we'll cap it to 1024 "steps" unless otherwise
-                # specified so we don't blow out memory unnecessarily.
-                return list(range(self.memory_range.start, self.memory_range.stop, (self.memory_range.stop - self.memory_range.start) // 1024))
-            return list(self.memory_range)
-        elif type(self.memory_range) == int:
-            return [self.memory_range]
-        else:
-            return self.memory_range
-
-    def gpu_value_range(self) -> Annotated[list[int], ValueRangeProvider(id='config_gpus')]:
-        if type(self.gpu_range) == range:
-            return list(self.gpu_range)
-        elif type(self.gpu_range) == int:
-            return [self.gpu_range]
-        else:
-            return self.gpu_range
-        
-    def runtime_value_range(self) -> Annotated[list[int], ValueRangeProvider(id='config_runtime')]:
-        if type(self.runtime_range) == range:
-            if self.runtime_range.step == 1:
-                # Because runtime would have so many potential values, we'll cap it to 1024 "steps" unless otherwise
-                # specified so we don't blow out memory unnecessarily.
-                # For a timeout of 7 days, that's ~10m increments
-                return list(range(self.runtime_range.start, self.runtime_range.stop, (self.runtime_range.stop - self.runtime_range.start) // 1024))
-        elif type(self.runtime_range) == int:
-            return [self.runtime_range]
-        else:
-            return self.runtime_range
-    
-    cpus: Annotated[int, PlanningVariable(value_range_provider_refs=['config_cpus'])] = 1
-    memory: Annotated[int, PlanningVariable(value_range_provider_refs=['config_memory'])] = 0
-    gpus: Annotated[int, PlanningVariable(value_range_provider_refs=['config_gpus'])] = 0
-    runtime: Annotated[int, PlanningVariable(value_range_provider_refs=['config_runtime'])] = 0
 
     allocations: Annotated[list[ComputeAllocation], InverseRelationShadowVariable(source_variable_name='configuration')] = field(default_factory=list)
 
