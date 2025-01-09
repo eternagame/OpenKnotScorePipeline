@@ -91,7 +91,7 @@ class SlurmRunner(Runner):
         gpu_seconds = 0
         for task in schedule.tasks:
             max_runtime = max(task.utilized_resources.max_runtime, max_runtime)
-            core_seconds += task.utilized_resources.max_runtime * task.queue.utilized_resources.cpus
+            core_seconds += task.utilized_resources.max_runtime * task.utilized_resources.cpus
             if task.queue.gpu_id is not None:
                 gpu_seconds += task.utilized_resources.max_runtime
 
