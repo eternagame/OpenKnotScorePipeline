@@ -14,6 +14,7 @@ def define_constraints(
             # Hard constraints
             constrain_queue_cores_to_allocation(factory),
             constrain_queue_memory_to_allocation(factory),
+            constrain_requires_gpu(factory),
             constrain_queue_gpu_to_allocation(factory),
             constrain_queue_gpu_memory_to_gpu(factory),
             constrain_queue_max_runtime_to_allocation(factory),
