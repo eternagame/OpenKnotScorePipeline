@@ -220,6 +220,15 @@ class ComputeConfiguration:
     Function which takes the current compute configuration and a given runtime
     and returns the cost
     '''
+    fine_grained_resources: bool
+    '''
+    Whether this configuration's resources can be requested to a specific amount.
+    If False, the cost will be computed assuming exactly config.cpus, etc
+    will be allocated for exactly config.runtime. If true, we will instead compute
+    the cost assuming the number of cores, etc allocated and the runtime will be the
+    maximum required across all allocations, simply treating config.cpus, etc the max
+    amount that can be requested 
+    '''
 
     def compute_cost(self, cpus: int, gpus: int, memory: int, runtime: int):
         if type(self.cost) in [int, Decimal]:
