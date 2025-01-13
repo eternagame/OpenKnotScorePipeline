@@ -3,12 +3,13 @@ from os import path
 sys.path.append(path.join(path.dirname(__file__), '../..'))
 
 from openknotscore.cli import OKSPConfig
-from openknotscore.runners.slurm import SlurmRunner
+from openknotscore.substation.runners.slurm import SlurmRunner
 
 class Config(OKSPConfig):
     source_files = path.join(path.dirname(__file__), 'source_rdats/*')
     db_path = path.join(path.dirname(__file__), 'db')
     runner = SlurmRunner(
+        dbpath=db_path,
         partition='default',
         # You will only be able to allocate jobs on nodes with this many cores available
         # at the same time, so higher numbers can potentially queue slower

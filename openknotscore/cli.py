@@ -4,7 +4,7 @@ import os
 import pandas as pd
 from .pipeline.import_source import load_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
-from .scheduler.domain import Task, Runnable, UtilizedResources
+from .substation.scheduler.domain import Task, Runnable, UtilizedResources
 from .config import OKSPConfig
 
 def run_cli():
@@ -42,8 +42,7 @@ def run_cli():
                 )
                 for predictor in config.enabled_predictors
             ],
-            'oksp-predict-generate-model',
-            config
+            'oksp-predict-generate-model'
         )
     else:
         source_data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))
@@ -67,13 +66,9 @@ def run_cli():
             ]
 
             if args.cmd == 'predict-forecast':
-                config.runner.forecast(pred_tasks, config)
+                config.runner.forecast(pred_tasks)
             else:
-                config.runner.run(
-                    pred_tasks,
-                    'oksp-predict',
-                    config
-                )
+                config.runner.run(pred_tasks, 'oksp-predict')
     
 if __name__ == '__main__':
     run_cli()

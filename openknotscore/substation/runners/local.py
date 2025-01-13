@@ -22,8 +22,8 @@ class LocalRunner(Runner):
     def _run(self, f):
         f()
 
-    def run(self, tasks, job_name, config):
-        if os.environ.get('OKSP_RUNNER_DRY_RUN') == 'true':
+    def run(self, tasks, job_name):
+        if os.environ.get('SUBSTATION_RUNNER_DRY_RUN') == 'true':
             print('DRY RUN LOCAL')
             return
         
@@ -32,7 +32,7 @@ class LocalRunner(Runner):
             for _ in pool.map(self._run, [task.runnable.run for task in tasks]):
                 pass
 
-    def forecast(self, tasks, config):
+    def forecast(self, tasks):
         # This is all very unscientific (tasks may utilize an arbitrary number of CPUs,
         # we don't do any checks around having sufficient RAM or VRAM, etc).
         # LocalRunner is not really expected to be used for serious use cases anyways vs testing

@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 import os
 import pandas as pd
 from .pipeline.prediction import predictors
-from .runners.runner import Runner
-from .runners.local import LocalRunner
+from .substation.runners.runner import Runner
+from .substation.runners.local import LocalRunner
 
 class OKSPConfig(ABC):
     @property

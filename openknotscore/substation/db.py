@@ -66,7 +66,7 @@ class DBWriter:
             index += struct.pack('<Q', len(collection_bytes))
             data += collection_bytes
         
-        self._f.write(b'OKSPDB')
+        self._f.write(b'SBSTDB')
         # Version
         self._f.write(struct.pack('<B', DB_VERSION))
         self._f.write(struct.pack('<B', len(self._collections)))
@@ -90,7 +90,7 @@ class DBReader:
     def __init__(self, path: str):
         self._f = open(path, 'rb')
 
-        if self._f.read(6) != b'OKSPDB':
+        if self._f.read(6) != b'SBSTDB':
             raise ValueError(f'File {path} is not a valid OKSP database')
         self.version = struct.unpack('<B', self._f.read(1))[0]
         if self.version > DB_VERSION:

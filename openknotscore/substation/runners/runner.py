@@ -3,9 +3,6 @@ from os import path
 from abc import ABC, abstractmethod
 from ..db import DBWriter, DBReader
 from ..scheduler.domain import Task, TaskQueue, Schedule
-# To resolve circular import
-if TYPE_CHECKING:
-    from ..config import OKSPConfig
 
 class DBComputeConfiguration(NamedTuple):
     allocations: list[int]
@@ -26,16 +23,16 @@ class DBTask(NamedTuple):
 
 class Runner(ABC):
     @abstractmethod
-    def run(self, tasks: list[Task], job_name: str, config: 'OKSPConfig'):
+    def run(self, tasks: list[Task], job_name: str):
         pass
 
     @abstractmethod
-    def forecast(self, tasks: list[Task], config: 'OKSPConfig'):
+    def forecast(self, tasks: list[Task], config):
         pass
 
     @staticmethod
-    def serialize_tasks(schedule: Schedule, job_name: str, config: 'OKSPConfig'):
-        dbpath = path.join(config.db_path, f'taskinfo-{job_name}.okspdb')
+    def serialize_tasks(schedule: Schedule, job_name: str, db_path: str):
+        dbpath = path.join(db_path, f'taskinfo-{job_name}.sbstdb')
         with DBWriter(dbpath) as db:
             cc_db = db.create_collection('compute_configurations')
             alloc_db = db.create_collection('allocations')

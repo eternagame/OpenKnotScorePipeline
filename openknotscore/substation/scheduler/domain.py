@@ -1,7 +1,5 @@
-from typing import Callable, Annotated, Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 from dataclasses import dataclass, field
-import math
-from decimal import Decimal
 
 class IdGenerator:
     '''
