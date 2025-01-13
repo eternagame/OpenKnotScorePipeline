@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from os import path
 from abc import ABC, abstractmethod
 from ..db import DBWriter, DBReader
-from ..plan.domain import Task, Schedule
+from ..scheduler.domain import Task, TaskQueue, Schedule
 # To resolve circular import
 if TYPE_CHECKING:
     from ..config import OKSPConfig
@@ -17,6 +17,7 @@ class DBQueue(NamedTuple):
     tasks: list[int]
     cpus: int
     gpu_id: int | None
+    child_queues: list[int]
 
 class DBTask(NamedTuple):
     function: int
@@ -44,22 +45,28 @@ class Runner(ABC):
             args_db = db.create_collection('args')
             kwargs_db = db.create_collection('kwargs')
 
+            def add_queue(queue: TaskQueue):
+                # TODO: Serialize child queues
+                task_ids = []
+                for task in queue.tasks:
+                    func_id = func_db.insert(task.runnable.func)
+                    arg_ids = [args_db.insert(arg) for arg in task.runnable.args]
+                    kwarg_ids = [kwargs_db.insert(kwarg) for kwarg in task.runnable.kwargs.items()]
+                    task_ids.append(task_db.insert(DBTask(func_id, arg_ids, kwarg_ids)))
+                qid = queue_db.insert(DBQueue(
+                    task_ids,
+                    queue.utilized_resources.cpus,
+                    queue.gpu_id,
+                    [add_queue(child_queue) for child_queue in queue.child_queues]
+                ))
+                return qid
+
             for compute_config in schedule.nonempty_compute_configurations():
                 alloc_ids = []
                 for alloc in compute_config.nonempty_allocations():
                     queue_ids = []
                     for queue in alloc.nonempty_queues():
-                        task_ids = []
-                        for task in queue.tasks:
-                            func_id = func_db.insert(task.runnable.func)
-                            arg_ids = [args_db.insert(arg) for arg in task.runnable.args]
-                            kwarg_ids = [kwargs_db.insert(kwarg) for kwarg in task.runnable.kwargs.items()]
-                            task_ids.append(task_db.insert(DBTask(func_id, arg_ids, kwarg_ids)))
-                        queue_ids.append(queue_db.insert(DBQueue(
-                            task_ids,
-                            queue.utilized_resources.cpus,
-                            queue.gpu_id
-                        )))
+                        queue_ids.append(add_queue(queue))
                     alloc_ids.append(alloc_db.insert(DBAllocation(queue_ids)))
                 cc_db.insert(DBComputeConfiguration(alloc_ids))
         

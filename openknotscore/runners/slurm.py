@@ -5,10 +5,10 @@ import math
 from decimal import Decimal
 from typing import Union
 from dataclasses import dataclass
+import multiprocessing
 from subprocess import run
-from multiprocessing import Pool
-from ..plan.domain import Schedule, ComputeConfiguration
-from ..plan.solver import solve
+from ..scheduler.domain import Schedule, ComputeConfiguration
+from ..scheduler.scheduler import schedule_tasks
 from .runner import Runner, DBComputeConfiguration, DBAllocation, DBQueue
 from ..db import DBReader
 
@@ -72,7 +72,7 @@ class SlurmRunner(Runner):
         )
 
     def run(self, tasks, job_name, config):
-        schedule: Schedule = solve(
+        schedule: Schedule = schedule_tasks(
             tasks,
             [
                 ComputeConfiguration(
@@ -81,15 +81,13 @@ class SlurmRunner(Runner):
                     self.max_gpus,
                     self.max_timeout,
                     self.gpu_memory,
-                    self._cost,
-                    True
                 )
-            ],
-            self.max_jobs
+            ]
         )
         
         dbpath = self.serialize_tasks(schedule, job_name, config)
         
+        # TODO: Limit submitted jobs to max_jobs
         for idx, comp_config in enumerate(schedule.compute_configurations):
             array_size = len(comp_config.nonempty_allocations())
 
@@ -110,7 +108,7 @@ class SlurmRunner(Runner):
             )
 
     def forecast(self, tasks, config):        
-        schedule: Schedule = solve(
+        schedule: Schedule = schedule_tasks(
             tasks,
             [
                 ComputeConfiguration(
@@ -119,11 +117,8 @@ class SlurmRunner(Runner):
                     self.max_gpus,
                     self.max_timeout,
                     self.gpu_memory,
-                    self._cost,
-                    True
                 )
             ],
-            self.max_jobs
         )
 
         max_runtime = 0
@@ -137,7 +132,10 @@ class SlurmRunner(Runner):
 
         nonempty_configs = schedule.nonempty_compute_configurations()
 
-        print(f'Optimization score: {schedule.score.soft_score}')
+        print(f'Slurm TRES cost: {sum(
+            self._cost(config.cpus, config.gpus, config.memory, config.runtime) * len(config.nonempty_allocations())
+            for config in nonempty_configs
+        )}')
         print(f'Longest task runtime: {max_runtime / 60 / 60: .2f} hours ({max_runtime} seconds)')
         print(f'Active core-hours: {core_seconds / 60 / 60: .2f}')
         print(f'Allocated core-hours: {sum([
@@ -154,25 +152,33 @@ class SlurmRunner(Runner):
         print(f'Longest job timeout: {max(config.runtime for config in nonempty_configs)} seconds')
 
     @staticmethod
-    def srun_queue(args):
-        dbpath: str = args[0]
-        queue_id: int = args[1]
-        queue: DBQueue = args[2]
+    def _srun_queue(dbpath: str, queue_id: int, queue: DBQueue, finished_queues: multiprocessing.Queue):
+        print('srun queue', queue_id)
         srun(
             ['python', '-c', f'from openknotscore.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue_id})'],
             cpus=queue.cpus,
             gpu_cmode='shared' if queue.gpu_id != '' else None,
             cuda_visible_devices=queue.gpu_id if queue.gpu_id != '' else None
         )
+        finished_queues.put(queue)
 
     @staticmethod
     def run_serialzied_allocation(dbpath: str, compute_config_id: str, allocation_id: str):
         with DBReader(dbpath) as db:
             config: DBComputeConfiguration = db.get('compute_configurations', compute_config_id)
             alloc: DBAllocation = db.get('allocations', config.allocations[allocation_id])
-            args: list[tuple[str, int, DBQueue]] = [(dbpath, queue_id, db.get('queues', queue_id)) for queue_id in alloc.queues]
-            with Pool(len(args)) as pool:
-                pool.map(SlurmRunner.srun_queue, args)
+            
+            finished_queues = multiprocessing.Queue()
+            running_queues = 0
+            for queue_id in alloc.queues:
+                multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue_id, db.get('queues', queue_id), finished_queues), daemon=True).start()
+                running_queues += 1
+            while running_queues > 0:
+                finished: DBQueue = finished_queues.get()
+                running_queues -= 1
+                for queue_id in finished.child_queues:
+                    multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue_id, db.get('queues', queue_id), finished_queues), daemon=True).start()
+                    running_queues += 1
 
 def srun(
     command: list[str],

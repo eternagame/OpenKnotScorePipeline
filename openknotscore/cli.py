@@ -4,7 +4,7 @@ import os
 import pandas as pd
 from .pipeline.import_source import load_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
-from .plan.domain import Task, Runnable, UtilizedResources
+from .scheduler.domain import Task, Runnable, UtilizedResources
 from .config import OKSPConfig
 
 def run_cli():

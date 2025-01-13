@@ -4,6 +4,4 @@ numpy==2.1.2
 pandas==2.2.3
 rdat-kit==1.6.3
 tqdm==4.66.5
-dask==2024.10.0
-timefold==1.17.0b0
 scikit-learn==1.6.0

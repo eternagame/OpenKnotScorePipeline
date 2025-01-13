@@ -55,8 +55,8 @@ def sample_process(f, timeout) -> ResourceSample:
 # running longer than MAX_TIMEOUT. This way we can aggressively increase our sequence length where
 # possible for very fast algorithms, but also not sit around forever if increasing that large of
 # a step for a slow algorithm causes it to run for a very long time
-MIN_TIMEOUT = 30 / 100
-MAX_TIMEOUT = 60 / 100
+MIN_TIMEOUT = 30
+MAX_TIMEOUT = 60
 # If we can run a strand this long within our timeout, just give up. We may be doing something
 # like using a constant-time function as a mock
 MAX_LEN = 25000
