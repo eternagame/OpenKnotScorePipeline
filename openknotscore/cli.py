@@ -63,6 +63,7 @@ def run_cli():
                 )
                 for predictor in config.enabled_predictors
                 for _, row in source_data.iterrows()
+                if not predictor.uses_experimental_reactivities or 'reactivity' in row
             ]
 
             if args.cmd == 'predict-forecast':
