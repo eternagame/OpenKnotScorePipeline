@@ -87,9 +87,14 @@ class SlurmRunner(Runner):
         
         dbpath = self.serialize_tasks(schedule, job_name, config)
         
-        # TODO: Limit submitted jobs to max_jobs
+        allocated_jobs = 0
         for idx, comp_config in enumerate(schedule.compute_configurations):
-            array_size = len(comp_config.nonempty_allocations())
+            if allocated_jobs >= self.max_jobs:
+                break
+
+            num_allocations = len(comp_config.nonempty_allocations())
+            array_size = min(num_allocations, self.max_jobs - num_allocations)
+            allocated_jobs += array_size
 
             max_gpus = self.config_max_gpus(comp_config)
             sbatch(

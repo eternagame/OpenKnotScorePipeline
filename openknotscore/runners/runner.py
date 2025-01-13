@@ -46,7 +46,6 @@ class Runner(ABC):
             kwargs_db = db.create_collection('kwargs')
 
             def add_queue(queue: TaskQueue):
-                # TODO: Serialize child queues
                 task_ids = []
                 for task in queue.tasks:
                     func_id = func_db.insert(task.runnable.func)
