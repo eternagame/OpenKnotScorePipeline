@@ -5,14 +5,17 @@ loading into memory) and data deduplication
 
 import struct
 import pickle
-from typing import Any
-from collections import OrderedDict
+from typing import Any, NamedTuple
 
 DB_VERSION = 1
 
+class Link(NamedTuple):
+    to: int
+
 class Collection:
     def __init__(self):
-        self._values = OrderedDict[bytes, int]()
+        self._values = list[bytes]()
+        self._value_lookup = dict[bytes, int]()
 
     def insert(self, value: Any):
         pkl = pickle.dumps(value)
@@ -20,16 +23,20 @@ class Collection:
             raise ValueError('DB value must be less than 2^64 bytes')
         if len(self._values) >= 2**64:
             raise ValueError('DB collection must contain less than 2^64 items')
-        item_id = self._values.get(pkl)
-        if item_id is None:
-            item_id = len(self._values)
-            self._values[pkl] = item_id
+        
+        item_id = len(self._values)
+        existing_item_id = self._value_lookup.get(pkl)
+        if existing_item_id is not None:
+            self._values.append(pickle.dumps(Link(existing_item_id)))
+        else:
+            self._value_lookup[pkl] = item_id
+            self._values.append(pkl)
         return item_id
     
     def serialize(self):
         index = b''
         data = b''
-        for value in self._values.keys():
+        for value in self._values:
             index += struct.pack('<Q', len(data))
             data += value
 
@@ -125,4 +132,7 @@ class DBReader:
             length = collection['data_length'] - offset
         
         self._f.seek(collection['offset'] + 16 + collection['entries']*8 + offset)
-        return pickle.loads(self._f.read(length))
+        data = pickle.loads(self._f.read(length))
+        if type(data) == Link:
+            return self.get(collection, data.to)
+        return data
