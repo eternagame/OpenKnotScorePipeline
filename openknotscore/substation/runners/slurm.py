@@ -73,6 +73,7 @@ class SlurmRunner(Runner):
         )
 
     def run(self, tasks, job_name):
+        print('Scheduling tasks...')
         schedule: Schedule = schedule_tasks(
             tasks,
             [
@@ -86,8 +87,10 @@ class SlurmRunner(Runner):
             ]
         )
         
+        print('Serializing tasks...')
         dbpath = self.serialize_tasks(schedule, job_name, self.db_path)
         
+        print('Submitting batches...')
         allocated_jobs = 0
         for idx, comp_config in enumerate(schedule.nonempty_compute_configurations()):
             if allocated_jobs >= self.max_jobs:

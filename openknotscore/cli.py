@@ -45,9 +45,11 @@ def run_cli():
             'oksp-predict-generate-model'
         )
     else:
+        print('Loading data...')
         source_data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))
 
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
+            print('Generating tasks...')
             pred_tasks = [
                 Task(
                     Runnable.create(predictor.run)(row['sequence'], row.get('reactivity')),
