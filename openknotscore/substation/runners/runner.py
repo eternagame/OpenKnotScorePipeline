@@ -51,7 +51,8 @@ class Runner(ABC):
 
             for compute_config in schedule.nonempty_compute_configurations():
                 alloc_ids = []
-                for alloc in compute_config.nonempty_allocations():
+                allocs = compute_config.nonempty_allocations()
+                for alloc in allocs:
                     queue_ids = []
                     for queue in alloc.nonempty_queues():
                         queue_ids.append(add_queue(queue))

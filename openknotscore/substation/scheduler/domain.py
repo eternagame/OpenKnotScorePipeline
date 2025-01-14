@@ -98,6 +98,9 @@ class TaskQueue:
     '''
 
     def leaf_queues(self) -> list['TaskQueue']:
+        if len(self.child_queues) == 0:
+            return [self]
+
         leaves: list['TaskQueue'] = []
         for queue in self.child_queues:
             if len(queue.child_queues) == 0:

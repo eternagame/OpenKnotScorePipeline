@@ -192,7 +192,7 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
         
         queue = leaf_queues[0]
         if (
-            queue.chain_utilized_resources.cpus < resource_request.cpus
+            queue.utilized_resources.cpus < resource_request.cpus
             or queue.utilized_resources.memory < resource_request.memory
             or queue.utilized_resources.gpu_memory < resource_request.gpu_memory
             or queue.chain_utilized_resources.max_runtime + resource_request.max_runtime > allocation.configuration.runtime
@@ -252,7 +252,8 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
 
                 queue.child_queues = [queue_a, queue_b]
                 schedule.task_queues.extend([queue_a, queue_b])
-                leaf_queues.extendleft([queue_a, queue_b])
+                leaf_queues.insert(0, queue_a)
+                leaf_queues.insert(1, queue_b)
                 queue = queue_a
 
         yield queue
