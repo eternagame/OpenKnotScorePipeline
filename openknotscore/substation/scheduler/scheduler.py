@@ -91,7 +91,8 @@ def recover_resources(resource_request: UtilizedResources, queue: TaskQueue):
         candidate_queue = candidate_queue.parent_queue
     available_resources.cpus += queue.allocation.configuration.cpus - queue.allocation.utilized_resources.cpus
     available_resources.memory += queue.allocation.configuration.memory - queue.allocation.utilized_resources.memory
-    available_resources.gpu_memory += queue.allocation.configuration.gpu_memory - queue.allocation.utilized_resources.gpu_memory
+    if queue.gpu_id:
+        available_resources.gpu_memory += queue.allocation.configuration.gpu_memory - queue.allocation.utilized_resources.gpu_memory[queue.gpu_id]
 
     if (
         available_resources.cpus < resource_request.cpus
@@ -136,7 +137,7 @@ def recover_resources(resource_request: UtilizedResources, queue: TaskQueue):
     if queue.utilized_resources.gpu_memory < resource_request.gpu_memory:
         gpu_memory_to_recover = resource_request.gpu_memory - queue.utilized_resources.gpu_memory
         queue.utilized_resources.gpu_memory += gpu_memory_to_recover
-        queue.allocation.utilized_resources.gpu_memory += gpu_memory_to_recover
+        queue.allocation.utilized_resources.gpu_memory[queue.gpu_id] += gpu_memory_to_recover
     
     return True
 
