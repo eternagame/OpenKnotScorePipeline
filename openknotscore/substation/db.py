@@ -7,14 +7,32 @@ This takes inspiration from dbm.sqite, sqlitedict, and hdf5 in various forms
 
 from typing import Any
 from contextlib import closing
+import os
 import re
 import pickle
 import sqlite3
+from pathlib import Path
 from xxhash import xxh3_64_digest
 
 class DB:
-    def __init__(self, path: str):
-        self._cx = sqlite3.connect(path, autocommit=True)
+    def __init__(self, path: str, flag="r", mode=0o666):
+        pathobj = Path(os.fsdecode(path))
+
+        if flag == "r":
+            cxflag = "ro"
+        elif flag == "w":
+            cxflag = "rw"
+        elif flag == "c":
+            cxflag = "rwc"
+            pathobj.touch(mode=mode, exist_ok=True)
+        elif flag == "n":
+            cxflag = "rwc"
+            pathobj.unlink(missing_ok=True)
+            pathobj.touch(mode=mode)
+        else:
+            raise ValueError(f"Flag must be one of 'r', 'w', 'c', or 'n', not {flag!r}")
+
+        self._cx = sqlite3.connect(f"{pathobj.absolute().as_uri()}?mode={cxflag}", autocommit=True, uri=True)
         self._cx.execute(
             f'''
             CREATE TABLE IF NOT EXISTS collections (

@@ -33,7 +33,7 @@ class Runner(ABC):
     @staticmethod
     def serialize_tasks(schedule: Schedule, job_name: str, db_path: str):
         dbpath = path.join(db_path, f'taskinfo-{job_name}.sbstdb')
-        with DB(dbpath) as db:
+        with DB(dbpath, 'n') as db:
             def add_queue(queue: TaskQueue):
                 task_ids = []
                 for task in queue.tasks:
