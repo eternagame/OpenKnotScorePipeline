@@ -1,138 +1,108 @@
 '''
 Custom file format for storing pipeline data, optimized for random access (without fully
 loading into memory) and data deduplication
+
+This takes inspiration from dbm.sqite, sqlitedict, and hdf5 in various forms
 '''
 
-import struct
+from typing import Any
+from contextlib import closing
+import re
 import pickle
-from typing import Any, NamedTuple
+import sqlite3
+from xxhash import xxh3_64_digest
 
-DB_VERSION = 1
+class DB:
+    def __init__(self, path: str):
+        self._cx = sqlite3.connect(path, autocommit=True)
+        self._cx.execute(
+            f'''
+            CREATE TABLE IF NOT EXISTS collections (
+                name TEXT UNIQUE NOT NULL
+            )'''
+        ).close()
+        self._collections = dict[str, int]()
+        with closing(self._cx.execute('SELECT name, ROWID FROM collections')) as cur:
+            for (name, rowid) in cur:
+                self._collections[name] = rowid
 
-class Link(NamedTuple):
-    to: int
+        self._cx.execute(
+            f'''
+            CREATE TABLE IF NOT EXISTS entries (
+                collection INTEGER NOT NULL,
+                key BLOB NOT NULL,
+                hash BLOB NOT NULL
+            )'''
+        ).close()
 
-class Collection:
-    def __init__(self):
-        self._values = list[bytes]()
-        self._value_lookup = dict[bytes, int]()
+        self._cx.execute(
+            f'''
+            CREATE TABLE IF NOT EXISTS data (
+                hash BLOB UNIQUE NOT NULL,
+                value BLOB NOT NULL
+            )'''
+        ).close()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *_):
+        self.close()
 
-    def insert(self, value: Any):
+    def close(self):
+        self._cx.close()
+
+    def _create_collection(self, name: str):
+        if not re.match(r'^[a-zA-Z]\w*$', name):
+            raise ValueError(f'Invalid collection name: {name}')
+        
+        with closing(self._cx.execute(
+            'INSERT INTO collections(name) VALUES(?) ON CONFLICT DO UPDATE SET name=name RETURNING ROWID',
+            (name,)
+        )) as cur:
+            (rowid,) = cur.fetchone()
+        self._collections[name] = rowid
+
+    @staticmethod
+    def _encode_key(key: bytes | str | int):
+        if isinstance(key, str):
+            return b's' + key.encode()
+        elif isinstance(key, int):
+            if key < 0:
+                raise ValueError('Negative integers as keys is not supported')
+            return b'i' + key.to_bytes((key.bit_length() + 7) // 8)
+        else:
+            return b'b' + key
+
+    def insert(self, collection: str, value: Any, key: str | bytes | int = None):
+        if not collection in self._collections:
+            self._create_collection(collection)
+
         pkl = pickle.dumps(value)
-        if len(pkl) > 2**64:
-            raise ValueError('DB value must be less than 2^64 bytes')
-        if len(self._values) >= 2**64:
-            raise ValueError('DB collection must contain less than 2^64 items')
-        
-        item_id = len(self._values)
-        existing_item_id = self._value_lookup.get(pkl)
-        if existing_item_id is not None:
-            self._values.append(pickle.dumps(Link(existing_item_id)))
-        else:
-            self._value_lookup[pkl] = item_id
-            self._values.append(pkl)
-        return item_id
-    
-    def serialize(self):
-        index = b''
-        data = b''
-        for value in self._values:
-            index += struct.pack('<Q', len(data))
-            data += value
+        hash = xxh3_64_digest(pkl)
+        key = key if key else hash
 
-        return struct.pack('<Q', len(self._values)) + struct.pack('<Q', len(data)) + index + data
-        
+        with closing(self._cx.execute('SELECT 1 FROM data WHERE hash=?', (hash,))) as cur:
+            exists = cur.fetchone() is not None
+        if not exists:
+            self._cx.execute(
+                'INSERT INTO data(hash, value) VALUES(?, ?)',
+                (hash, pkl)
+            ).close()
+        self._cx.execute(
+            'INSERT INTO entries(collection, key, hash) VALUES(?, ?, ?)',
+            (self._collections[collection], self._encode_key(key), hash)
+        ).close()
 
-class DBWriter:
-    def __init__(self, path: str):
-        self._f = open(path, 'wb')
-        self._collections: dict[str, Collection] = {}
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        self.write()
-        self.close()
-    
-    def write(self):
-        index = b''
-        data = b''
-        for (name, collection) in self._collections.items():
-            collection_bytes = collection.serialize()
-            name_bytes = name.encode()
-            index += struct.pack('<B', len(name_bytes))
-            index += name_bytes
-            index += struct.pack('<Q', len(collection_bytes))
-            data += collection_bytes
-        
-        self._f.write(b'SBSTDB')
-        # Version
-        self._f.write(struct.pack('<B', DB_VERSION))
-        self._f.write(struct.pack('<B', len(self._collections)))
-        self._f.write(index)
-        self._f.write(data)
+        return key
 
-    def close(self):
-        self._f.close()
-
-    def create_collection(self, name: str):
-        if name in self._collections:
-            raise RuntimeError(f'Collection {name} already exists')
-        if len(name.encode()) > 255:
-            raise ValueError('Collection name must be less than 256 bytes')
-        if len(self._collections) > 255:
-            raise ValueError('DB must contain less than 256 collections')
-        self._collections[name] = Collection()
-        return self._collections[name]
-
-class DBReader:
-    def __init__(self, path: str):
-        self._f = open(path, 'rb')
-
-        if self._f.read(6) != b'SBSTDB':
-            raise ValueError(f'File {path} is not a valid OKSP database')
-        self.version = struct.unpack('<B', self._f.read(1))[0]
-        if self.version > DB_VERSION:
-            raise ValueError(f'OKSP database at {path} uses DB version {self.version}, but only up to {DB_VERSION} is supported')
-        
-        collection_count = struct.unpack('<B', self._f.read(1))[0]
-        collection_offset = 0
-        self._collections = {}
-        for _ in range(collection_count):
-            name_length = struct.unpack('<B', self._f.read(1))[0]
-            name = self._f.read(name_length).decode()
-            data_length = struct.unpack('<Q', self._f.read(8))[0]
-            self._collections[name] = {'offset': collection_offset}
-            collection_offset += data_length
-
-        header_size = self._f.tell()
-        for name in self._collections:
-            self._collections[name]['offset'] += header_size
-            self._f.seek(self._collections[name]['offset'])
-            self._collections[name]['entries'] = struct.unpack('<Q', self._f.read(8))[0]
-            self._collections[name]['data_length'] = struct.unpack('<Q', self._f.read(8))[0]
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        self.close()
-
-    def close(self):
-        self._f.close()
-
-    def get(self, collection: str, index: int):
-        collection = self._collections[collection]
-        self._f.seek(collection['offset'] + 16 + 8*index)
-        offset = struct.unpack('<Q', self._f.read(8))[0]
-        if index < collection['entries'] - 1:
-            length = struct.unpack('<Q', self._f.read(8))[0] - offset
-        else:
-            length = collection['data_length'] - offset
-        
-        self._f.seek(collection['offset'] + 16 + collection['entries']*8 + offset)
-        data = pickle.loads(self._f.read(length))
-        if type(data) == Link:
-            return self.get(collection, data.to)
-        return data
+    def get(self, collection: str, key: str | bytes | int):
+        with closing(self._cx.execute(
+            'SELECT value FROM data LEFT JOIN entries on entries.hash=data.hash WHERE entries.collection=? AND entries.key=?',
+            (self._collections[collection], self._encode_key(key))
+        )) as cur:
+            res = cur.fetchone()
+            if not res:
+                raise KeyError(f'Could not find item. collection={collection} key={key}')
+            value = res[0]
+        return pickle.loads(value)

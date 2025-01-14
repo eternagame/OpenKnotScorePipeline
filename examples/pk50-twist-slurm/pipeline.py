@@ -9,13 +9,13 @@ class Config(OKSPConfig):
     source_files = path.join(path.dirname(__file__), 'source_rdats/*')
     db_path = path.join(path.dirname(__file__), 'db')
     runner = SlurmRunner(
-        dbpath=db_path,
-        partition='default',
+        db_path=db_path,
+        partitions='default',
         # You will only be able to allocate jobs on nodes with this many cores available
         # at the same time, so higher numbers can potentially queue slower
         max_cores=4,
         # Slurm limits this per partition via the MaxMemPerCPU QOS
-        max_mem_per_core=8000,
+        max_mem_per_core=8000 * 1024 ** 2,
         # Slurm limits the amount of queued jobs in a given partition via the MaxSubmitPU/MaxSubmitPA QOS,
         # and you may be further restricted to the actual resources that are requested by MaxTRESPU.
         # There may also be a separate limit configured for the number of jobs that can be submitted over some

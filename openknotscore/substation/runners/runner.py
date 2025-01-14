@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, NamedTuple
 from os import path
 from abc import ABC, abstractmethod
-from ..db import DBWriter, DBReader
+from ..db import DB
 from ..scheduler.domain import Task, TaskQueue, Schedule
 
 class DBComputeConfiguration(NamedTuple):
@@ -33,23 +33,15 @@ class Runner(ABC):
     @staticmethod
     def serialize_tasks(schedule: Schedule, job_name: str, db_path: str):
         dbpath = path.join(db_path, f'taskinfo-{job_name}.sbstdb')
-        with DBWriter(dbpath) as db:
-            cc_db = db.create_collection('compute_configurations')
-            alloc_db = db.create_collection('allocations')
-            queue_db = db.create_collection('queues')
-            task_db = db.create_collection('tasks')
-            func_db = db.create_collection('functions')
-            args_db = db.create_collection('args')
-            kwargs_db = db.create_collection('kwargs')
-
+        with DB(dbpath) as db:
             def add_queue(queue: TaskQueue):
                 task_ids = []
                 for task in queue.tasks:
-                    func_id = func_db.insert(task.runnable.func)
-                    arg_ids = [args_db.insert(arg) for arg in task.runnable.args]
-                    kwarg_ids = [kwargs_db.insert(kwarg) for kwarg in task.runnable.kwargs.items()]
-                    task_ids.append(task_db.insert(DBTask(func_id, arg_ids, kwarg_ids)))
-                qid = queue_db.insert(DBQueue(
+                    func_id = db.insert('functions', task.runnable.func)
+                    arg_ids = [db.insert('args', arg) for arg in task.runnable.args]
+                    kwarg_ids = [db.insert('kwargs', kwarg) for kwarg in task.runnable.kwargs.items()]
+                    task_ids.append(db.insert('tasks', DBTask(func_id, arg_ids, kwarg_ids)))
+                qid = db.insert('queues', DBQueue(
                     task_ids,
                     queue.utilized_resources.cpus,
                     queue.gpu_id,
@@ -63,14 +55,14 @@ class Runner(ABC):
                     queue_ids = []
                     for queue in alloc.nonempty_queues():
                         queue_ids.append(add_queue(queue))
-                    alloc_ids.append(alloc_db.insert(DBAllocation(queue_ids)))
-                cc_db.insert(DBComputeConfiguration(alloc_ids))
+                    alloc_ids.append(db.insert('allocations', DBAllocation(queue_ids)))
+                db.insert('compute_configurations', DBComputeConfiguration(alloc_ids), compute_config.id)
         
         return dbpath
 
     @staticmethod
-    def run_serialized_queue(dbpath: str, id: int):
-        with DBReader(dbpath) as db:
+    def run_serialized_queue(dbpath: str, id: bytes):
+        with DB(dbpath) as db:
             queue: DBQueue = db.get('queues', id)
             for task_id in queue.tasks:
                 task: DBTask = db.get('tasks', task_id)
