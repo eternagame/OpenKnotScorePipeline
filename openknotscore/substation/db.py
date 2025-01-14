@@ -32,7 +32,7 @@ class DB:
         else:
             raise ValueError(f"Flag must be one of 'r', 'w', 'c', or 'n', not {flag!r}")
 
-        self._cx = sqlite3.connect(f"{pathobj.absolute().as_uri()}?mode={cxflag}", autocommit=True, uri=True)
+        self._cx = sqlite3.connect(f"{pathobj.absolute().as_uri()}?mode={cxflag}", uri=True)
         self._cx.execute(
             f'''
             CREATE TABLE IF NOT EXISTS collections (
@@ -65,7 +65,11 @@ class DB:
         return self
     
     def __exit__(self, *_):
+        self.commit()
         self.close()
+
+    def commit(self):
+        self._cx.commit()
 
     def close(self):
         self._cx.close()
