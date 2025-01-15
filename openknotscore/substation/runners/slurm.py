@@ -12,7 +12,7 @@ from subprocess import run
 from ..scheduler.domain import Schedule, ComputeConfiguration, Task
 from ..scheduler.scheduler import schedule_tasks
 from .runner import Runner, DBComputeConfiguration, DBAllocation, DBQueue
-from ..db import DB
+from ..taskdb import TaskDB, DBQueue
 
 @dataclass
 class SlurmRunner(Runner):
@@ -167,31 +167,28 @@ class SlurmRunner(Runner):
         print(f'Longest job timeout: {max(config.runtime for config in nonempty_configs)} seconds')
 
     @staticmethod
-    def _srun_queue(dbpath: str, queue_id: int, queue: DBQueue, finished_queues: multiprocessing.Queue):
+    def _srun_queue(dbpath: str, queue: DBQueue, finished_queues: multiprocessing.Queue):
         srun(
-            ['python', '-c', f'from openknotscore.substation.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue_id})'],
+            ['python', '-c', f'from openknotscore.substation.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue.id})'],
             cpus=queue.cpus,
             gpu_cmode='shared' if queue.gpu_id != None else None,
-            cuda_visible_devices=queue.gpu_id if queue.gpu_id != '' else None
+            cuda_visible_devices=queue.gpu_id
         )
         finished_queues.put(queue)
 
     @staticmethod
     def run_serialzied_allocation(dbpath: str, compute_config_id: int, allocation_id: int):
-        with DB(dbpath) as db:
-            config: DBComputeConfiguration = db.get('compute_configurations', compute_config_id)
-            alloc: DBAllocation = db.get('allocations', config.allocations[allocation_id])
-            
+        with TaskDB(dbpath) as db:
             finished_queues = multiprocessing.Queue()
             running_queues = 0
-            for queue_id in alloc.queues:
-                multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue_id, db.get('queues', queue_id), finished_queues), daemon=True).start()
+            for queue in db.queues_for_allocation(compute_config_id, allocation_id):
+                multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
                 running_queues += 1
             while running_queues > 0:
                 finished: DBQueue = finished_queues.get()
                 running_queues -= 1
-                for queue_id in finished.child_queues:
-                    multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue_id, db.get('queues', queue_id), finished_queues), daemon=True).start()
+                for queue in db.children_for_queue(finished.id):
+                    multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
                     running_queues += 1
 
 def srun(

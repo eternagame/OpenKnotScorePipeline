@@ -82,6 +82,7 @@ def run_cli():
                             for name in task.runnable.args[0].prediction_names:
                                 preddb.set_queued(name, task.runnable.args[1], task.runnable.args[2])
                     config.runner.run(pred_tasks, 'oksp-predict', on_queued)
+                print(f'{datetime.now()} Completed')
     
 if __name__ == '__main__':
     run_cli()
