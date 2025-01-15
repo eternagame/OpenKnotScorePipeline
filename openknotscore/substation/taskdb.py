@@ -42,7 +42,8 @@ class TaskDB:
         CREATE TABLE IF NOT EXISTS arguments (
             id INTEGER PRIMARY KEY,
             argument BLOB UNIQUE NOT NULL,
-            hash BLOB UNIQUE NOT NULL
+            hash BLOB UNIQUE NOT NULL,
+            is_kw INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS queues (
             id INTEGER UNIQUE NOT NULL,
@@ -59,8 +60,7 @@ class TaskDB:
         );
         CREATE TABLE IF NOT EXISTS task_args (
             task INTEGER NOT NULL,
-            argument INTEGER NOT NULL,
-            is_kw INTEGER NOT NULL
+            argument INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS task_args_task ON task_args(task);
         ''').close()
@@ -96,13 +96,13 @@ class TaskDB:
                         pkl = pickle.dumps(arg)
                         hash = xxh3_64_digest(pkl)
                         hash_cache[id(arg)] = hash
-                        yield (pkl, hash)
+                        yield (pkl, hash, False)
                 for kwarg in task.runnable.kwargs:
                     if not id(kwarg) in hash_cache:
                         pkl = pickle.dumps(kwarg)
                         hash = xxh3_64_digest(pkl)
                         hash_cache[id(kwarg)] = hash
-                        yield (pkl, hash)
+                        yield (pkl, hash, True)
 
         self._cx.executemany(
             '''
@@ -112,19 +112,19 @@ class TaskDB:
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO arguments(argument, hash) VALUES(?, ?) ON CONFLICT DO NOTHING
+            INSERT INTO arguments(argument, hash, is_kw) VALUES(?, ?, ?) ON CONFLICT DO NOTHING
             ''',
             args()
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?), 0)
+            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?))
             ''',
             itertools.chain.from_iterable([(task.id, hash_cache[id(arg)]) for arg in task.runnable.args] for task in schedule.tasks)
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?), 1)
+            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?))
             ''',
             itertools.chain.from_iterable([(task.id, hash_cache[id(kwarg)]) for kwarg in task.runnable.kwargs.items()] for task in schedule.tasks)
         ).close()
