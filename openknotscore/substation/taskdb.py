@@ -97,9 +97,6 @@ class TaskDB:
                         hash = xxh3_64_digest(pkl)
                         hash_cache[id(arg)] = hash
                         yield (pkl, hash)
-        
-        def kwargs():
-            for task in schedule.tasks:
                 for kwarg in task.runnable.kwargs:
                     if not id(kwarg) in hash_cache:
                         pkl = pickle.dumps(kwarg)
@@ -118,12 +115,6 @@ class TaskDB:
             INSERT INTO arguments(argument, hash) VALUES(?, ?) ON CONFLICT DO NOTHING
             ''',
             args()
-        ).close()
-        self._cx.executemany(
-            '''
-            INSERT INTO arguments(argument, hash) VALUES(?, ?) ON CONFLICT DO NOTHING
-            ''',
-            kwargs()
         ).close()
         self._cx.executemany(
             '''
