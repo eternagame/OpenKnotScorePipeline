@@ -79,25 +79,33 @@ class TaskDB:
         self._cx.close()
 
     def write_schedule(self, schedule: Schedule):
+        hash_cache = dict[int, bytes]()
+
         def functions():
             for task in schedule.tasks:
-                pkl = pickle.dumps(task.runnable.func)
-                hash = xxh3_64_digest(pkl)
-                yield (pkl, hash)
+                if not id(task.runnable.func) in hash_cache:
+                    pkl = pickle.dumps(task.runnable.func)
+                    hash = xxh3_64_digest(pkl)
+                    hash_cache[id(task.runnable.func)] = hash
+                    yield (pkl, hash)
         
         def args():
             for task in schedule.tasks:
                 for arg in task.runnable.args:
-                    pkl = pickle.dumps(arg)
-                    hash = xxh3_64_digest(pkl)
-                    yield (pkl, hash)
+                    if not id(arg) in hash_cache:
+                        pkl = pickle.dumps(arg)
+                        hash = xxh3_64_digest(pkl)
+                        hash_cache[id(arg)] = hash
+                        yield (pkl, hash)
         
         def kwargs():
             for task in schedule.tasks:
                 for kwarg in task.runnable.kwargs:
-                    pkl = pickle.dumps(kwarg)
-                    hash = xxh3_64_digest(pkl)
-                    yield (pkl, hash)
+                    if not id(kwarg) in hash_cache:
+                        pkl = pickle.dumps(kwarg)
+                        hash = xxh3_64_digest(pkl)
+                        hash_cache[id(kwarg)] = hash
+                        yield (pkl, hash)
 
         self._cx.executemany(
             '''
@@ -121,19 +129,19 @@ class TaskDB:
             '''
             INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?), 0)
             ''',
-            itertools.chain.from_iterable([(task.id, xxh3_64_digest(pickle.dumps(arg))) for arg in task.runnable.args] for task in schedule.tasks)
+            itertools.chain.from_iterable([(task.id, hash_cache[id(arg)]) for arg in task.runnable.args] for task in schedule.tasks)
         ).close()
         self._cx.executemany(
             '''
             INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?), 1)
             ''',
-            itertools.chain.from_iterable([(task.id, xxh3_64_digest(pickle.dumps(kwarg))) for kwarg in task.runnable.kwargs.items()] for task in schedule.tasks)
+            itertools.chain.from_iterable([(task.id, hash_cache[id(kwarg)]) for kwarg in task.runnable.kwargs.items()] for task in schedule.tasks)
         ).close()
         self._cx.executemany(
             '''
             INSERT INTO tasks VALUES(?, ?, (SELECT id FROM functions where hash=?))
             ''',
-            ((task.id, task.queue.id, xxh3_64_digest(pickle.dumps(task.runnable.func))) for task in schedule.tasks)
+            ((task.id, task.queue.id, hash_cache[id(task.runnable.func)]) for task in schedule.tasks)
         ).close()
         self._cx.executemany(
             '''
