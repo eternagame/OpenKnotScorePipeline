@@ -59,6 +59,7 @@ class TaskDB:
             argument INTEGER NOT NULL,
             is_kw INTEGER NOT NULL
         );
+        CREATE INDEX IF NOT EXISTS task_args_task ON task_args(task);
         ''').close()
     
     def __enter__(self):
