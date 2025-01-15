@@ -33,6 +33,8 @@ def register_deferred(deferred: Deferred):
         )
     ):
         deferred.func()
+        deferred.count_since_flushed = 0
+        deferred.last_flushed_time = datetime.now()
 
 def flush_deferred():
     while registry:
