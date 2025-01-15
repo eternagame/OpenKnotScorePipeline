@@ -135,7 +135,8 @@ results = list[Result]()
 
 def flush_predictions(db_path: str):
     with PredictionDB(db_path, 'w') as db:
-        for result in results:
+        while results:
+            result = results.pop()
             if result.success:
                 db.set_success(result.predictor, result.seq, result.reactivities, result.output)
             else:
