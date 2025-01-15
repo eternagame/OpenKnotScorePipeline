@@ -5,7 +5,7 @@ import itertools
 import os
 import pickle
 import sqlite3
-from.scheduler.domain import Schedule, Runnable
+from .scheduler.domain import Schedule, Runnable
 
 class DBQueue(NamedTuple):
     id: int
