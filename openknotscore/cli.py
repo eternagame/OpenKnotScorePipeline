@@ -57,14 +57,7 @@ def run_cli():
             pred_tasks = [
                 Task(
                     Runnable.create(predict)(predictor, row['sequence'], row.get('reactivity'), pred_db_path),
-                    UtilizedResources(
-                        predictor.approximate_max_runtime(row['sequence']),
-                        predictor.approximate_avg_runtime(row['sequence']),
-                        predictor.approximate_min_runtime(row['sequence']),
-                        predictor.cpus,
-                        predictor.approximate_max_memory(row['sequence']),
-                        predictor.approximate_max_gpu_memory(row['sequence']),
-                    )
+                    predictor.approximate_resources(row['sequence'])
                 )
                 for predictor in config.enabled_predictors
                 for _, row in source_data.iterrows()

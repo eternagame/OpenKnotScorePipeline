@@ -14,6 +14,7 @@ except Exception as e:
     def arnie_load_failed(*args, **kwargs):
         raise e
     mfe = bpps = pk_predict = pk_predict_from_bpp = arnie_load_failed
+from ...substation.scheduler.domain import UtilizedResources
 
 class Predictor(ABC):
     @property
@@ -43,54 +44,10 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
-    def approximate_min_runtime(self, seq: str) -> int:
-        '''
-        Returns the approximate lower-bound runtime for computing the prediction for the given
-        sequence, in seconds
-        
-        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
-        '''
+    def approximate_resources(self, seq: str) -> UtilizedResources:
         pass
-
-    @abstractmethod
-    def approximate_avg_runtime(self, seq: str) -> int:
-        '''
-        Returns the approximate average-bound runtime for computing the prediction for the given
-        sequence, in seconds
-        
-        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
-        '''
-        pass
-
-    @abstractmethod
-    def approximate_max_runtime(self, seq: str) -> int:
-        '''
-        Returns the approximate upper-bound runtime for computing the prediction for the given
-        sequence, in seconds
-        
-        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
-        '''
-        pass
-
-    @abstractmethod
-    def approximate_max_memory(self, seq: str) -> int:
-        '''
-        Returns the approximate upper-bound memory for computing the prediction for the given
-        sequence, in megabytes
-    
-        Values for this are likely computed via openknotscore.pipeline.prediction.sample.model_resource_usage
-        '''
-        pass
-
-    cpus: int = 1
 
     gpu = False
-    def approximate_max_gpu_memory(self, seq: str) -> int:
-        '''
-        Returns the approximate upper-bound GPU memory for computing the prediction for the given
-        sequence, in megabytes
-        '''
-        return 0
 
 class ArnieMfePredictor(Predictor):
     uses_experimental_reactivities = False
