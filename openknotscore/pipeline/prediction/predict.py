@@ -105,7 +105,8 @@ class PredictionDB:
         
 
     def set_success(self, predictor: str, sequence: str, reactivities: list[float], structure: str):
-        self._cx.execute('INSERT INTO structures VALUES(?, ?) ON CONFLICT DO NOTHING', (structure,xxh3_64_digest(structure))).close()
+        structure_hash = xxh3_64_digest(structure)
+        self._cx.execute('INSERT INTO structures VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
         self._cx.execute(
             '''
             UPDATE predictions SET status=(SELECT ROWID FROM status where status=?), result=(SELECT ROWID FROM structures WHERE hash=?)
@@ -114,11 +115,12 @@ class PredictionDB:
                 AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
                 AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
             ''',
-            (PredictionStatus.SUCCESS.value, xxh3_64_digest(structure), predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
+            (PredictionStatus.SUCCESS.value, structure_hash, predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
         ).close()
 
     def set_failure(self, predictor: str, sequence: str, reactivities: list[float], error: str):
-        self._cx.execute('INSERT INTO errors VALUES(?, ?) ON CONFLICT DO NOTHING', (error,)).close()
+        error_hash = xxh3_64_digest(error)
+        self._cx.execute('INSERT INTO errors VALUES(?, ?) ON CONFLICT DO NOTHING', (error, error_hash)).close()
         self._cx.execute(
             '''
             UPDATE predictions SET status=(SELECT ROWID FROM status where status=?), result=(SELECT ROWID FROM errors WHERE hash=?)
@@ -127,7 +129,7 @@ class PredictionDB:
                 AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
                 AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
             ''',
-            (PredictionStatus.FAILED.value, xxh3_64_digest(error), predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
+            (PredictionStatus.FAILED.value, error_hash, predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
         ).close()
 
 @dataclass
