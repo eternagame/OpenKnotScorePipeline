@@ -109,6 +109,14 @@ class TaskQueue:
                 leaves.extend(queue.leaf_queues())
         return leaves
 
+    def tasks_recursive(self):
+        for task in self.tasks:
+            yield task
+        
+        for child in self.child_queues:
+            for task in child.tasks_recursive():
+                yield task
+
     id: int = field(default_factory=IdGenerator().generate)
 
     def __repr__(self):
@@ -136,6 +144,11 @@ class ComputeAllocation:
         return leaves
 
     id: int = field(default_factory=IdGenerator().generate)
+
+    def tasks(self):
+        for queue in self.queues:
+            for task in queue.tasks_recursive():
+                yield task
 
     def __post_init__(self):
         self.utilized_resources.gpu_memory = [0 for _ in range(self.configuration.gpus)]

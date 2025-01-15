@@ -1,9 +1,12 @@
 import argparse
 import importlib
 import os
+from os import path
+from datetime import datetime
 import pandas as pd
 from .pipeline.import_source import load_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
+from .pipeline.prediction.predict import predict, PredictionDB
 from .substation.scheduler.domain import Task, Runnable, UtilizedResources
 from .config import OKSPConfig
 
@@ -45,14 +48,15 @@ def run_cli():
             'oksp-predict-generate-model'
         )
     else:
-        print('Loading data...')
+        print(f'{datetime.now()} Loading data...')
         source_data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))
 
+        pred_db_path = path.join(config.db_path, 'predictions.db')
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
-            print('Generating tasks...')
+            print(f'{datetime.now()} Generating tasks...')
             pred_tasks = [
                 Task(
-                    Runnable.create(predictor.run)(row['sequence'], row.get('reactivity')),
+                    Runnable.create(predict)(predictor, row['sequence'], row.get('reactivity'), pred_db_path),
                     UtilizedResources(
                         predictor.approximate_max_runtime(row['sequence']),
                         predictor.approximate_avg_runtime(row['sequence']),
@@ -68,9 +72,16 @@ def run_cli():
             ]
 
             if args.cmd == 'predict-forecast':
+                print(f'{datetime.now()} Starting forecast...')
                 config.runner.forecast(pred_tasks)
             else:
-                config.runner.run(pred_tasks, 'oksp-predict')
+                print(f'{datetime.now()} Starting run...')
+                with PredictionDB(pred_db_path, 'c') as preddb:
+                    def on_queued(tasks: list[Task]):
+                        for task in tasks:
+                            for name in task.runnable.args[0].prediction_names:
+                                preddb.set_queued(name, task.runnable.args[1], task.runnable.args[2])
+                    config.runner.run(pred_tasks, 'oksp-predict', on_queued)
     
 if __name__ == '__main__':
     run_cli()

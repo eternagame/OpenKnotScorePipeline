@@ -27,6 +27,11 @@ class Predictor(ABC):
         '''
         pass
 
+    @property
+    @abstractmethod
+    def prediction_names(self) -> list[str]:
+        pass
+
     @abstractmethod
     def run(self, seq: str, reactivities: list[float]) -> dict[str, str]:
         '''
@@ -89,9 +94,11 @@ class Predictor(ABC):
 
 class ArnieMfePredictor(Predictor):
     uses_experimental_reactivities = False
+    prediction_names = []
 
     def __init__(self, package_name: str, as_name: str, arnie_kwargs: dict = None):
         self.name = as_name
+        self.prediction_names = [self.name]
         self.package_name = package_name
         self.arnie_kwargs = arnie_kwargs or {}
 
@@ -113,9 +120,11 @@ class ArnieMfeShapePredictor(ArnieMfePredictor):
     
 class ArniePkPredictor(Predictor):
     uses_experimental_reactivities = False
+    prediction_names = []
 
     def __init__(self, package_name: str, as_name: str, arnie_kwargs: dict = None):
         self.name = as_name
+        self.prediction_names = [self.name]
         self.package_name = package_name
         self.arnie_kwargs = arnie_kwargs or {}
 
@@ -126,6 +135,7 @@ class ArniePkPredictor(Predictor):
 
 class ArniePkFromBppPredictor(Predictor):
     uses_experimental_reactivities = False
+    prediction_names = []
 
     def __init__(self, package_name: str, arnie_bpp_kwargs: dict = None):
         self.package_name = package_name
@@ -133,6 +143,7 @@ class ArniePkFromBppPredictor(Predictor):
         self.heuristics = []
 
     def add_heuristic(self, heuristic, as_name: str, arnie_heuristic_kwargs: dict = None):
+        self.prediction_names.append(as_name)
         self.heuristics.append({
             'heuristic': heuristic,
             'arnie_heuristic_kwargs': arnie_heuristic_kwargs,
@@ -227,6 +238,7 @@ class ShapifyHfoldPredictor(Predictor):
     def __init__(self, as_name: str, hfold_location: str):
         self.hfold_location = hfold_location
         self.name = as_name
+        self.prediction_names = [as_name]
 
     def run(self, seq: str):
         hfold_return = subprocess.run([self.hfold_location+"/HFold_iterative", "--s", seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")

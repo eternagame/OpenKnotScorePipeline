@@ -3,11 +3,13 @@ from os import path
 import re
 import math
 from decimal import Decimal
-from typing import Union
+from typing import Union, Callable, Iterable
 from dataclasses import dataclass
+import itertools
+from datetime import datetime
 import multiprocessing
 from subprocess import run
-from ..scheduler.domain import Schedule, ComputeConfiguration
+from ..scheduler.domain import Schedule, ComputeConfiguration, Task
 from ..scheduler.scheduler import schedule_tasks
 from .runner import Runner, DBComputeConfiguration, DBAllocation, DBQueue
 from ..db import DB
@@ -72,8 +74,8 @@ class SlurmRunner(Runner):
             ) for alloc in config.allocations
         )
 
-    def run(self, tasks, job_name):
-        print('Scheduling tasks...')
+    def run(self, tasks: list[Task], job_name: str, on_queue: Callable[[Iterable[Task]], None] | None = None):
+        print(f'{datetime.now()} Scheduling tasks...')
         schedule: Schedule = schedule_tasks(
             tasks,
             [
@@ -87,17 +89,17 @@ class SlurmRunner(Runner):
             ]
         )
         
-        print('Serializing tasks...')
+        print(f'{datetime.now()} Serializing tasks...')
         dbpath = self.serialize_tasks(schedule, job_name, self.db_path)
         
-        print('Submitting batches...')
+        print(f'{datetime.now()} Submitting batches...')
         allocated_jobs = 0
         for idx, comp_config in enumerate(schedule.nonempty_compute_configurations()):
             if allocated_jobs >= self.max_jobs:
                 break
 
-            num_allocations = len(comp_config.nonempty_allocations())
-            array_size = min(num_allocations, self.max_jobs - num_allocations)
+            allocations = comp_config.nonempty_allocations()
+            array_size = min(len(allocations), self.max_jobs - len(allocations))
             allocated_jobs += array_size
 
             max_gpus = self.config_max_gpus(comp_config)
@@ -115,6 +117,10 @@ class SlurmRunner(Runner):
                 array=f'0-{array_size-1}' if array_size > 1 else None,
                 echo_cmd=True
             )
+            
+            if on_queue:
+                on_queue(itertools.chain.from_iterable(alloc.tasks() for alloc in allocations[0:array_size]))
+
 
     def forecast(self, tasks):        
         schedule: Schedule = schedule_tasks(
@@ -165,7 +171,7 @@ class SlurmRunner(Runner):
         srun(
             ['python', '-c', f'from openknotscore.substation.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue_id})'],
             cpus=queue.cpus,
-            gpu_cmode='shared' if queue.gpu_id != '' else None,
+            gpu_cmode='shared' if queue.gpu_id != None else None,
             cuda_visible_devices=queue.gpu_id if queue.gpu_id != '' else None
         )
         finished_queues.put(queue)

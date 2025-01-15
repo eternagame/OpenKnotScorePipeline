@@ -1,8 +1,10 @@
-from typing import TYPE_CHECKING, NamedTuple
+from tqdm import tqdm
+from typing import NamedTuple, Callable, Iterable
 from os import path
 from abc import ABC, abstractmethod
 from ..db import DB
 from ..scheduler.domain import Task, TaskQueue, Schedule
+from ..deferred import flush_deferred
 
 class DBComputeConfiguration(NamedTuple):
     allocations: list[int]
@@ -23,7 +25,7 @@ class DBTask(NamedTuple):
 
 class Runner(ABC):
     @abstractmethod
-    def run(self, tasks: list[Task], job_name: str):
+    def run(self, tasks: list[Task], job_name: str, on_queue: Callable[[Iterable[Task]], None] | None = None):
         pass
 
     @abstractmethod
@@ -65,9 +67,10 @@ class Runner(ABC):
     def run_serialized_queue(dbpath: str, id: bytes):
         with DB(dbpath) as db:
             queue: DBQueue = db.get('queues', id)
-            for task_id in queue.tasks:
+            for task_id in tqdm(queue.tasks):
                 task: DBTask = db.get('tasks', task_id)
                 func = db.get('functions', task.function)
                 args = [db.get('args', arg_id) for arg_id in task.args]
                 kwargs = {k:v for (k,v) in (db.get('kwargs', kwarg_id) for kwarg_id in task.kwargs)}
                 func(*args, **kwargs)
+        flush_deferred()

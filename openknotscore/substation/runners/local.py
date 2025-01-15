@@ -1,8 +1,11 @@
+from typing import Callable, Iterable
 import os
 from multiprocessing import cpu_count
 from concurrent.futures import ProcessPoolExecutor as Pool
 from dataclasses import dataclass
+from ..scheduler.domain import Task
 from .runner import Runner
+from ..deferred import flush_deferred
 
 # https://github.com/python/cpython/issues/111873#issuecomment-1809135036
 def start_orphan_checker():
@@ -22,7 +25,10 @@ class LocalRunner(Runner):
     def _run(self, f):
         f()
 
-    def run(self, tasks, job_name):
+    def run(self, tasks: list[Task], job_name: str, on_queue: Callable[[Iterable[Task]], None] | None = None):
+        if on_queue:
+            on_queue(tasks)
+
         if os.environ.get('SUBSTATION_RUNNER_DRY_RUN') == 'true':
             print('DRY RUN LOCAL')
             return
@@ -31,6 +37,8 @@ class LocalRunner(Runner):
             # Iterate over results so that we catch errors
             for _ in pool.map(self._run, [task.runnable.run for task in tasks]):
                 pass
+
+        flush_deferred()
 
     def forecast(self, tasks):
         # This is all very unscientific (tasks may utilize an arbitrary number of CPUs,

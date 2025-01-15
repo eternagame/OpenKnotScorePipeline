@@ -120,11 +120,11 @@ class DB:
 
     def get(self, collection: str, key: str | bytes | int):
         with closing(self._cx.execute(
-            'SELECT value FROM data LEFT JOIN entries on entries.hash=data.hash WHERE entries.collection=? AND entries.key=?',
+            'SELECT data.value FROM entries LEFT JOIN data on entries.hash=data.hash WHERE entries.collection=? AND entries.key=?',
             (self._collections[collection], self._encode_key(key))
         )) as cur:
             res = cur.fetchone()
-            if not res:
-                raise KeyError(f'Could not find item. collection={collection} key={key}')
-            value = res[0]
+        if not res:
+            raise KeyError(f'Could not find item. collection={collection} key={key}')
+        value = res[0]
         return pickle.loads(value)
