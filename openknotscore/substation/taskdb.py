@@ -5,6 +5,7 @@ import itertools
 import os
 import pickle
 import sqlite3
+from xxhash import xxh3_64_digest
 from .scheduler.domain import Schedule, Runnable
 
 class DBQueue(NamedTuple):
@@ -35,11 +36,13 @@ class TaskDB:
         self._cx.executescript('''
         CREATE TABLE IF NOT EXISTS functions (
             id INTEGER PRIMARY KEY,
-            function BLOB UNIQUE NOT NULL
+            function BLOB NOT NULL,
+            hash BLOB UNIQUE NOT NULL
         );
         CREATE TABLE IF NOT EXISTS arguments (
             id INTEGER PRIMARY KEY,
-            argument BLOB UNIQUE NOT NULL
+            argument BLOB UNIQUE NOT NULL,
+            hash BLOB UNIQUE NOT NULL
         );
         CREATE TABLE IF NOT EXISTS queues (
             id INTEGER UNIQUE NOT NULL,
@@ -76,41 +79,61 @@ class TaskDB:
         self._cx.close()
 
     def write_schedule(self, schedule: Schedule):
+        def functions():
+            for task in schedule.tasks:
+                pkl = pickle.dumps(task.runnable.func)
+                hash = xxh3_64_digest(pkl)
+                yield (pkl, hash)
+        
+        def args():
+            for task in schedule.tasks:
+                for arg in task.runnable.args:
+                    pkl = pickle.dumps(arg)
+                    hash = xxh3_64_digest(pkl)
+                    yield (pkl, hash)
+        
+        def kwargs():
+            for task in schedule.tasks:
+                for kwarg in task.runnable.kwargs:
+                    pkl = pickle.dumps(kwarg)
+                    hash = xxh3_64_digest(pkl)
+                    yield (pkl, hash)
+
         self._cx.executemany(
             '''
-            INSERT INTO functions(function) VALUES(?) ON CONFLICT DO NOTHING
+            INSERT INTO functions(function, hash) VALUES(?, ?) ON CONFLICT DO NOTHING
             ''',
-            ((pickle.dumps(task.runnable.func),) for task in schedule.tasks)
+            functions()
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO arguments(argument) VALUES(?) ON CONFLICT DO NOTHING
+            INSERT INTO arguments(argument, hash) VALUES(?, ?) ON CONFLICT DO NOTHING
             ''',
-            itertools.chain.from_iterable([(pickle.dumps(arg),) for arg in task.runnable.args] for task in schedule.tasks)
+            args()
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO arguments(argument) VALUES(?) ON CONFLICT DO NOTHING
+            INSERT INTO arguments(argument, hash) VALUES(?, ?) ON CONFLICT DO NOTHING
             ''',
-            itertools.chain.from_iterable([(pickle.dumps(kwarg),) for kwarg in task.runnable.kwargs.items()] for task in schedule.tasks)
+            kwargs()
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE argument=?), 0)
+            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?), 0)
             ''',
-            itertools.chain.from_iterable([(task.id, pickle.dumps(arg)) for arg in task.runnable.args] for task in schedule.tasks)
+            itertools.chain.from_iterable([(task.id, xxh3_64_digest(pickle.dumps(arg))) for arg in task.runnable.args] for task in schedule.tasks)
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE argument=?), 1)
+            INSERT INTO task_args VALUES(?, (SELECT id FROM arguments WHERE hash=?), 1)
             ''',
-            itertools.chain.from_iterable([(task.id, pickle.dumps(kwarg)) for kwarg in task.runnable.kwargs.items()] for task in schedule.tasks)
+            itertools.chain.from_iterable([(task.id, xxh3_64_digest(pickle.dumps(kwarg))) for kwarg in task.runnable.kwargs.items()] for task in schedule.tasks)
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO tasks VALUES(?, ?, (SELECT id FROM functions where function=?))
+            INSERT INTO tasks VALUES(?, ?, (SELECT id FROM functions where hash=?))
             ''',
-            ((task.id, task.queue.id, pickle.dumps(task.runnable.func)) for task in schedule.tasks)
+            ((task.id, task.queue.id, xxh3_64_digest(pickle.dumps(task.runnable.func))) for task in schedule.tasks)
         ).close()
         self._cx.executemany(
             '''
