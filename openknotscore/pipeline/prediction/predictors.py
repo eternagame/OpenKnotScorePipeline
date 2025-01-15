@@ -94,13 +94,15 @@ class Predictor(ABC):
 
 class ArnieMfePredictor(Predictor):
     uses_experimental_reactivities = False
-    prediction_names = []
 
     def __init__(self, package_name: str, as_name: str, arnie_kwargs: dict = None):
         self.name = as_name
-        self.prediction_names = [self.name]
         self.package_name = package_name
         self.arnie_kwargs = arnie_kwargs or {}
+
+    @property
+    def prediction_names(self):
+        return [self.name]
 
     def run(self, seq: str):
         return {
@@ -120,13 +122,15 @@ class ArnieMfeShapePredictor(ArnieMfePredictor):
     
 class ArniePkPredictor(Predictor):
     uses_experimental_reactivities = False
-    prediction_names = []
 
     def __init__(self, package_name: str, as_name: str, arnie_kwargs: dict = None):
         self.name = as_name
-        self.prediction_names = [self.name]
         self.package_name = package_name
         self.arnie_kwargs = arnie_kwargs or {}
+
+    @property
+    def prediction_names(self):
+        return [self.name]
 
     def run(self, seq: str, reactivities: list[float]):
         return {
@@ -135,7 +139,6 @@ class ArniePkPredictor(Predictor):
 
 class ArniePkFromBppPredictor(Predictor):
     uses_experimental_reactivities = False
-    prediction_names = []
 
     def __init__(self, package_name: str, arnie_bpp_kwargs: dict = None):
         self.package_name = package_name
@@ -150,6 +153,10 @@ class ArniePkFromBppPredictor(Predictor):
             'name': as_name
         })
         return self
+
+    @property
+    def prediction_names(self):
+        return [heuristic['name'] for heuristic in self.heuristics]
 
     def run(self, seq: str, reactivities: list[float]):
         # TODO: Figure out how to set things up such that we only compute bpps once for all heuristics
