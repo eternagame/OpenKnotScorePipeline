@@ -90,8 +90,6 @@ class PredictionDB:
         hash_cache = dict[int, bytes]()
         name_cache = set()
 
-        tasks = list(tasks)
-
         for task in tasks:
             predictor: Predictor = task.runnable.args[0]
             sequence: str = task.runnable.args[1]
