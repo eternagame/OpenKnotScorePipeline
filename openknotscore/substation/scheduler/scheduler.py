@@ -235,6 +235,7 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
                 new_queue.utilized_resources.cpus = available_resources.cpus - queue.utilized_resources.cpus
                 new_queue.utilized_resources.memory = available_resources.memory - queue.utilized_resources.memory
                 new_queue.utilized_resources.gpu_memory = available_resources.gpu_memory - queue.utilized_resources.gpu_memory
+                new_queue.parent_queue = queue.parent_queue
                 queue.parent_queue.child_queues.append(new_queue)
                 schedule.task_queues.append(new_queue)
                 leaf_queues.insert(1, new_queue)
@@ -244,12 +245,14 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
                 queue_a.utilized_resources.cpus = resource_request.cpus
                 queue_a.utilized_resources.memory = resource_request.memory
                 queue_a.utilized_resources.gpu_memory = resource_request.gpu_memory
+                queue_a.parent_queue = queue
 
                 queue_b = TaskQueue(queue.gpu_id, allocation)
                 queue_b.chain_utilized_resources = replace(queue.chain_utilized_resources)
                 queue_b.utilized_resources.cpus = available_resources.cpus - queue_a.utilized_resources.cpus
                 queue_b.utilized_resources.memory = available_resources.memory - queue_a.utilized_resources.memory
                 queue_b.utilized_resources.gpu_memory = available_resources.gpu_memory - queue_a.utilized_resources.gpu_memory
+                queue_b.parent_queue = queue
 
                 queue.child_queues = [queue_a, queue_b]
                 schedule.task_queues.extend([queue_a, queue_b])
