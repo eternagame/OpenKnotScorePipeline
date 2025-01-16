@@ -4,6 +4,7 @@ import os
 from os import path
 from datetime import datetime
 import pandas as pd
+from typing import Iterable
 from .pipeline.import_source import load_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
 from .pipeline.prediction.predict import predict, PredictionDB
@@ -70,10 +71,8 @@ def run_cli():
             else:
                 print(f'{datetime.now()} Starting run...')
                 with PredictionDB(pred_db_path, 'c') as preddb:
-                    def on_queued(tasks: list[Task]):
-                        for task in tasks:
-                            for name in task.runnable.args[0].prediction_names:
-                                preddb.set_queued(name, task.runnable.args[1], task.runnable.args[2])
+                    def on_queued(tasks: Iterable[Task]):
+                        preddb.set_queued(tasks)
                     config.runner.run(pred_tasks, 'oksp-predict', on_queued)
                 print(f'{datetime.now()} Completed')
     
