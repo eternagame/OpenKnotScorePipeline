@@ -57,12 +57,19 @@ def run_cli():
             print(f'{datetime.now()} Generating tasks...')
             pred_tasks = [
                 Task(
+                    Runnable.create(predict)(predictor, sequence, None, pred_db_path),
+                    predictor.approximate_resources(sequence)
+                )
+                for predictor in config.enabled_predictors if not predictor.uses_experimental_reactivities
+                for sequence in source_data['sequence'].unique()
+            ]
+            pred_tasks += [
+                Task(
                     Runnable.create(predict)(predictor, sequence, reactivity, pred_db_path),
                     predictor.approximate_resources(sequence)
                 )
-                for predictor in config.enabled_predictors
+                for predictor in config.enabled_predictors if predictor.uses_experimental_reactivities
                 for sequence, reactivity in source_data[['sequence', 'reactivity']].itertuples(False)
-                if not predictor.uses_experimental_reactivities or reactivity
             ]
 
             if args.cmd == 'predict-forecast':
