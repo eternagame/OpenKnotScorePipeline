@@ -1,4 +1,5 @@
 from typing import Iterable
+from contextlib import closing
 import traceback
 from dataclasses import dataclass
 from enum import Enum
@@ -40,6 +41,7 @@ class PredictionDB:
         self._cx.executescript(
             f'''
             CREATE TABLE IF NOT EXISTS predictors (
+                id INTEGER PRIMARY KEY,
                 name TEXT UNIQUE NOT NULL
             );
             CREATE TABLE IF NOT EXISTS sequences (
@@ -51,7 +53,8 @@ class PredictionDB:
                 hash BLOB UNIQUE NOT NULL
             );
             CREATE TABLE IF NOT EXISTS status (
-                status TEXT UNIQUE NOT NULL
+                id INTEGER PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL
             );
             CREATE TABLE IF NOT EXISTS structures (
                 structure TEXT NOT NULL,
@@ -71,7 +74,7 @@ class PredictionDB:
             CREATE UNIQUE INDEX IF NOT EXISTS prediction_args ON predictions(predictor, sequence, reactivities); 
             '''
         )
-        self._cx.executemany('INSERT INTO status VALUES (?) ON CONFLICT DO NOTHING', [(PredictionStatus.SUCCESS.value,), (PredictionStatus.FAILED.value,), (PredictionStatus.QUEUED.value,)])
+        self._cx.executemany('INSERT INTO status(name) VALUES (?) ON CONFLICT DO NOTHING', [(PredictionStatus.SUCCESS.value,), (PredictionStatus.FAILED.value,), (PredictionStatus.QUEUED.value,)])
 
     def __enter__(self):
         return self
@@ -86,17 +89,30 @@ class PredictionDB:
     def close(self):
         self._cx.close()
     
-    def set_queued(self, tasks: Iterable[Task]):
+    def curr_status(self, predictor: str, sequence: str, reactivities: list[float]):
+        with closing(self._cx.execute(
+            '''
+            SELECT status.name FROM predictions LEFT JOIN status on status.id=predictions.status
+            WHERE
+                predictor=(SELECT id FROM predictors WHERE name=?)
+                AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
+                AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
+            ''',
+            (predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
+        )) as cur:
+            val = cur.fetchone()
+            if val:
+                return PredictionStatus(val[0])
+            return None
+
+    def set_queued(self, inputs: Iterable[tuple[Predictor, str, list[float]]]):
         hash_cache = dict[int, bytes]()
         name_cache = set()
 
-        for task in tasks:
-            predictor: Predictor = task.runnable.args[0]
-            sequence: str = task.runnable.args[1]
-            reactivities: list[float] = task.runnable.args[2]
+        for (predictor, sequence, reactivities) in inputs:
             for name in predictor.prediction_names:
                 if not name in name_cache:
-                    self._cx.execute('INSERT INTO predictors VALUES(?) ON CONFLICT DO NOTHING', (name,)).close()
+                    self._cx.execute('INSERT INTO predictors(name) VALUES(?) ON CONFLICT DO NOTHING', (name,)).close()
                     name_cache.add(name)
                 sequence_hash = hash_cache.get(id(sequence))
                 if not sequence_hash:
@@ -113,11 +129,11 @@ class PredictionDB:
                 self._cx.execute(
                     '''
                     INSERT INTO predictions(predictor, sequence, reactivities, status) VALUES(
-                        (SELECT ROWID FROM predictors WHERE name=?),
+                        (SELECT id FROM predictors WHERE name=?),
                         (SELECT ROWID FROM sequences WHERE hash=?),
                         (SELECT ROWID FROM reactivities WHERE hash=?),
-                        (SELECT ROWID FROM status where status=?)
-                    ) ON CONFLICT DO UPDATE SET status=(SELECT ROWID FROM status where status=?)
+                        (SELECT id FROM status where name=?)
+                    ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?)
                     ''',
                     (name, sequence_hash, reactivities_hash, PredictionStatus.QUEUED.value, PredictionStatus.QUEUED.value),
                 ).close()
@@ -127,9 +143,9 @@ class PredictionDB:
         self._cx.execute('INSERT INTO structures VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
         self._cx.execute(
             '''
-            UPDATE predictions SET status=(SELECT ROWID FROM status where status=?), result=(SELECT ROWID FROM structures WHERE hash=?)
+            UPDATE predictions SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM structures WHERE hash=?)
             WHERE
-                predictor=(SELECT ROWID FROM predictors WHERE name=?)
+                predictor=(SELECT id FROM predictors WHERE name=?)
                 AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
                 AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
             ''',
@@ -141,9 +157,9 @@ class PredictionDB:
         self._cx.execute('INSERT INTO errors VALUES(?, ?) ON CONFLICT DO NOTHING', (error, error_hash)).close()
         self._cx.execute(
             '''
-            UPDATE predictions SET status=(SELECT ROWID FROM status where status=?), result=(SELECT ROWID FROM errors WHERE hash=?)
+            UPDATE predictions SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM errors WHERE hash=?)
             WHERE
-                predictor=(SELECT ROWID FROM predictors WHERE name=?)
+                predictor=(SELECT id FROM predictors WHERE name=?)
                 AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
                 AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
             ''',

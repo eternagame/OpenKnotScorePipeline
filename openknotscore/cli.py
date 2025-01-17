@@ -7,7 +7,7 @@ import pandas as pd
 from typing import Iterable
 from .pipeline.import_source import load_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
-from .pipeline.prediction.predict import predict, PredictionDB
+from .pipeline.prediction.predict import predict, PredictionDB, PredictionStatus
 from .substation.scheduler.domain import Task, Runnable, UtilizedResources
 from .config import OKSPConfig
 
@@ -55,22 +55,33 @@ def run_cli():
         pred_db_path = path.join(config.db_path, 'predictions.db')
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
             print(f'{datetime.now()} Generating tasks...')
-            pred_tasks = [
-                Task(
-                    Runnable.create(predict)(predictor, sequence, None, pred_db_path),
-                    predictor.approximate_resources(sequence)
-                )
-                for predictor in config.enabled_predictors if not predictor.uses_experimental_reactivities
-                for sequence in source_data['sequence'].unique()
-            ]
-            pred_tasks += [
-                Task(
-                    Runnable.create(predict)(predictor, sequence, reactivity, pred_db_path),
-                    predictor.approximate_resources(sequence)
-                )
-                for predictor in config.enabled_predictors if predictor.uses_experimental_reactivities
-                for sequence, reactivity in source_data[['sequence', 'reactivity']].itertuples(False)
-            ]
+            pred_tasks = []
+            with PredictionDB(pred_db_path, 'c') as preddb:
+                for predictor in config.enabled_predictors:
+                    if not predictor.uses_experimental_reactivities:
+                        for sequence in source_data['sequence'].unique():
+                            if all(
+                                preddb.curr_status(name, sequence, None) != PredictionStatus.SUCCESS
+                                for name in predictor.prediction_names
+                            ): continue
+                            pred_tasks.append(
+                                Task(
+                                    Runnable.create(predict)(predictor, sequence, None, pred_db_path),
+                                    predictor.approximate_resources(sequence)
+                                )
+                            )
+                    else:
+                        for sequence, reactivity in source_data[['sequence', 'reactivity']].itertuples(False):
+                            if all(
+                                preddb.curr_status(name, sequence, reactivity) != PredictionStatus.SUCCESS
+                                for name in predictor.prediction_names
+                            ): continue
+                            pred_tasks.append(
+                                Task(
+                                    Runnable.create(predict)(predictor, sequence, reactivity, pred_db_path),
+                                    predictor.approximate_resources(sequence)
+                                )
+                            )
 
             if args.cmd == 'predict-forecast':
                 print(f'{datetime.now()} Starting forecast...')
@@ -79,7 +90,9 @@ def run_cli():
                 print(f'{datetime.now()} Starting run...')
                 with PredictionDB(pred_db_path, 'c') as preddb:
                     def on_queued(tasks: Iterable[Task]):
-                        preddb.set_queued(tasks)
+                        preddb.set_queued(
+                            (task.runnable.args[0], task.runnable.args[1], task.runnable.args[2]) for task in tasks
+                        )
                     config.runner.run(pred_tasks, 'oksp-predict', on_queued)
                 print(f'{datetime.now()} Completed')
     
