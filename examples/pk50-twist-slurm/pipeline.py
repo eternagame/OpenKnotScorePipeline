@@ -8,6 +8,15 @@ from openknotscore.substation.runners.slurm import SlurmRunner
 class Config(OKSPConfig):
     source_files = path.join(path.dirname(__file__), 'source_rdats/*')
     db_path = path.join(path.dirname(__file__), 'db')
+    # When calculating the expected max runtime needed to run tasks, use this multiplier to add
+    # some additional buffer to account for underestimates or variation
+    # runtime_buffer = 1.15
+    # When calculating the expected RAM needed to run tasks, use this multiplier to add
+    # some additional buffer to account for underestimates or variation
+    # memory_buffer = 1.15
+    # When calculating the expected GPU memory needed to run tasks, use this multiplier to add
+    # some additional buffer to account for underestimates or variation
+    # gpu_memory_buffer = 1.15
     runner = SlurmRunner(
         db_path=db_path,
         partitions='default',
@@ -31,12 +40,12 @@ class Config(OKSPConfig):
         mem_cost=0.25,
         # You will only be able to allocate jobs on nodes with this many GPUs available
         # at the same time, so higher numbers can potentially queue slower
-        max_gpus=0,
+        # max_gpus=0,
         # Since we need to make sure we have enough memory available for the job to run,
         # we specify the amount of GPU memory that will be requested for GPUs
-        gpu_memory=0,
+        # gpu_memory=0,
         # If we were to require a GPU, we'd probably want to add a constraint to ensure
         # the GPU is of appropriate size. There may also be other requirements for things like
         # GPU architecture, CPU model for benchmarking, etc
-        constraints=None
+        # constraints=None,
     )

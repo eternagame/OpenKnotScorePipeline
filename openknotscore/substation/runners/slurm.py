@@ -11,7 +11,7 @@ import multiprocessing
 from subprocess import run
 from ..scheduler.domain import Schedule, ComputeConfiguration, Task
 from ..scheduler.scheduler import schedule_tasks
-from .runner import Runner, DBComputeConfiguration, DBAllocation, DBQueue
+from .runner import Runner, DBQueue
 from ..taskdb import TaskDB, DBQueue
 
 @dataclass

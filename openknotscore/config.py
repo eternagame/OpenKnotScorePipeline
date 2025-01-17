@@ -68,3 +68,22 @@ class OKSPConfig(ABC):
     ]
 
     runner: Runner = LocalRunner()
+
+    runtime_buffer = 1.15
+    '''
+    When calculating the expected max runtime needed to run tasks, use this multiplier to add
+    some additional buffer to account for underestimates or variation
+    '''
+
+    memory_buffer = 1.15
+    '''
+    When calculating the expected RAM needed to run tasks, use this multiplier to add
+    some additional buffer to account for underestimates or variation
+    '''
+
+    gpu_memory_buffer = 1.15
+    '''
+    When calculating the expected GPU memory needed to run tasks, use this multiplier to add
+    some additional buffer to ac
+    '''
+    
