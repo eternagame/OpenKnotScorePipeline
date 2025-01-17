@@ -105,7 +105,7 @@ class PredictionDB:
                 return PredictionStatus(val[0])
             return None
 
-    def set_queued(self, inputs: Iterable[tuple[Predictor, str, list[float]]]):
+    def upsert_queued(self, inputs: Iterable[tuple[Predictor, str, list[float]]]):
         hash_cache = dict[int, bytes]()
         name_cache = set()
 
@@ -138,7 +138,60 @@ class PredictionDB:
                     (name, sequence_hash, reactivities_hash, PredictionStatus.QUEUED.value, PredictionStatus.QUEUED.value),
                 ).close()
 
-    def set_success(self, predictor: str, sequence: str, reactivities: list[float], structure: str):
+    def upsert_success(self, inputs: Iterable[tuple[Predictor, str, list[float], str]], override: bool):
+        hash_cache = dict[int, bytes]()
+        name_cache = set()
+
+        for (predictor, sequence, reactivities, structure) in inputs:
+            for name in predictor.prediction_names:
+                if not name in name_cache:
+                    self._cx.execute('INSERT INTO predictors(name) VALUES(?) ON CONFLICT DO NOTHING', (name,)).close()
+                    name_cache.add(name)
+                sequence_hash = hash_cache.get(id(sequence))
+                if not sequence_hash:
+                    sequence_hash = xxh3_64_digest(sequence)
+                    hash_cache[id(sequence)] = sequence_hash
+                    self._cx.execute('INSERT INTO sequences VALUES(?, ?) ON CONFLICT DO NOTHING', (sequence, sequence_hash)).close()
+                reactivities_hash = hash_cache.get(id(reactivities))
+                if not reactivities_hash:
+                    reactivities_pkl = pickle.dumps(reactivities)
+                    reactivities_hash = xxh3_64_digest(reactivities_pkl)
+                    hash_cache[id(reactivities)] = reactivities_hash
+                    self._cx.execute('INSERT INTO reactivities VALUES(?, ?) ON CONFLICT DO NOTHING', (reactivities_pkl, reactivities_hash)).close()
+                structure_hash = hash_cache.get(id(structure))
+                if not structure_hash:
+                    structure_hash = xxh3_64_digest(structure)
+                    hash_cache[id(structure)] = structure_hash
+                    self._cx.execute('INSERT INTO structures VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
+                
+                if override:
+                    self._cx.execute(
+                        f'''
+                        INSERT INTO predictions(predictor, sequence, reactivities, result, status) VALUES(
+                            (SELECT id FROM predictors WHERE name=?),
+                            (SELECT ROWID FROM sequences WHERE hash=?),
+                            (SELECT ROWID FROM reactivities WHERE hash=?),
+                            (SELECT ROWID FROM result WHERE hash=?),
+                            (SELECT id FROM status where name=?)
+                        ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM result WHERE hash=?)
+                        ''',
+                        (name, sequence_hash, reactivities_hash, structure_hash, PredictionStatus.SUCCESS.value, PredictionStatus.SUCCESS.value),
+                    ).close()
+                else:
+                    self._cx.execute(
+                        f'''
+                        INSERT INTO predictions(predictor, sequence, reactivities, result, status) VALUES(
+                            (SELECT id FROM predictors WHERE name=?),
+                            (SELECT ROWID FROM sequences WHERE hash=?),
+                            (SELECT ROWID FROM reactivities WHERE hash=?),
+                            (SELECT ROWID FROM result WHERE hash=?),
+                            (SELECT id FROM status where name=?)
+                        ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM result WHERE hash=?) WHERE status=(SELECT id FROM status where name=?)
+                        ''',
+                        (name, sequence_hash, reactivities_hash, structure_hash, PredictionStatus.SUCCESS.value, PredictionStatus.SUCCESS.value, PredictionStatus.QUEUED.value),
+                    ).close()
+
+    def update_success(self, predictor: str, sequence: str, reactivities: list[float], structure: str):
         structure_hash = xxh3_64_digest(structure)
         self._cx.execute('INSERT INTO structures VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
         self._cx.execute(
@@ -152,7 +205,7 @@ class PredictionDB:
             (PredictionStatus.SUCCESS.value, structure_hash, predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
         ).close()
 
-    def set_failure(self, predictor: str, sequence: str, reactivities: list[float], error: str):
+    def update_failure(self, predictor: str, sequence: str, reactivities: list[float], error: str):
         error_hash = xxh3_64_digest(error)
         self._cx.execute('INSERT INTO errors VALUES(?, ?) ON CONFLICT DO NOTHING', (error, error_hash)).close()
         self._cx.execute(
@@ -181,9 +234,9 @@ def flush_predictions(db_path: str):
         while results:
             result = results.pop()
             if result.success:
-                db.set_success(result.predictor, result.seq, result.reactivities, result.output)
+                db.update_success(result.predictor, result.seq, result.reactivities, result.output)
             else:
-                db.set_failure(result.predictor, result.seq, result.reactivities, result.output)
+                db.update_failure(result.predictor, result.seq, result.reactivities, result.output)
 
 deferred = dict[str, Deferred]()
 
