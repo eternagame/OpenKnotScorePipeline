@@ -75,6 +75,7 @@ def run_cli():
                     (sequence, structure, None)
                     for col in set(predictor_names).intersection(available_columns)
                     for (sequence, structure) in data[['sequence', col]].itertuples(False)
+                    if not (pd.isna(structure) or all([char == "x" for char in structure]))
                 ),
                 args.override
             )
