@@ -104,7 +104,7 @@ class SlurmRunner(Runner):
 
             max_gpus = self.config_max_gpus(comp_config)
             sbatch(
-                f'python -c "from openknotscore.substation.runners.slurm import SlurmRunner; SlurmRunner.run_serialzied_allocation(\'{dbpath}\', {comp_config.id}, {'$SLURM_ARRAY_TASK_ID' if array_size > 1 else 0})"',
+                f'python -c "from openknotscore.substation.runners.slurm import SlurmRunner; SlurmRunner.run_serialized_allocation(\'{dbpath}\', {comp_config.id}, {'$SLURM_ARRAY_TASK_ID' if array_size > 1 else 0})"',
                 f'{job_name}-{idx}' if len(schedule.compute_configurations) > 1 else job_name,
                 path.join(self.db_path, f'slurm-logs'),
                 timeout=self.config_max_runtime(comp_config),
@@ -177,7 +177,7 @@ class SlurmRunner(Runner):
         finished_queues.put(queue)
 
     @staticmethod
-    def run_serialzied_allocation(dbpath: str, compute_config_id: int, allocation_id: int):
+    def run_serialized_allocation(dbpath: str, compute_config_id: int, allocation_id: int):
         with TaskDB(dbpath) as db:
             finished_queues = multiprocessing.Queue()
             running_queues = 0
