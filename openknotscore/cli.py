@@ -103,7 +103,7 @@ def run_cli():
                             pred_tasks.append(
                                 Task(
                                     Runnable.create(predict)(predictor, sequence, None, pred_db_path),
-                                    
+                                    resources
                                 )
                             )
                     else:
