@@ -5,6 +5,8 @@ from arnie.utils import convert_dotbracket_to_bp_list, post_process_struct
 
 def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx, filter_singlets=False):
     """Calculates an Eterna score for a predicted structure and accompanying reactivity dataset
+
+    The Eterna Classic score measures how well a structure prediction matches the reactivity data
     
     data: a list of reactivity values, normalized from 0 to 1 (~90th percentile)
     structure: a list of predicted values in dot bracket notation
@@ -100,6 +102,11 @@ def remove_bps_in_unscored_regions(bps, score_start_idx, score_end_idx):
 
 def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end_idx, filter_singlets=False):
     """Calculates the crossed pair quality score for a DBN structure and accompanying dataset
+
+    The CPQ scores are a pair of metrics that calculate how well the reactivity data
+    supports the presence of crossed pairs in a predicted structure. The crossed pair
+    score is measured against the entire structure, while the crossed pair quality score
+    is measured against only the base pairs that are predicted to be in a crossed pair.
     
     crossed_pair_score = 
     100 * (number of residues in crossed pairs with data < 0.25) /
@@ -233,6 +240,12 @@ def calculateCorrelationCoefficient(structure, data, score_start_idx, score_end_
 def calculateOpenKnotScore(row, prediction_tags):
     """ Calculates the OpenKnotScore metric for a structure and accompanying data
 
+    The OpenKnotScore is a metric that estimates how likely a sequence is to contain 
+    a pseudoknot structure. The score is derived by averaging the Eterna Classic Score
+    (measure of structure match to reactivity data) and the Crossed Pair Quality Score
+    (measure of reactivity support for crossed pairs) across an ensemble of several
+    structure predictions from various predictive models.
+
     row: a pandas dataframe row containing the data for a single sequence including
       - DBN structures 
     prediction_tags: names of predictors (as present in row) to include in scoring
@@ -282,7 +295,7 @@ def calculateOpenKnotScore(row, prediction_tags):
     df["ensemble_ECS"] = avg_ecs
     df["ensemble_CPQ"] = avg_cpq
     df["ensemble_OKS"] = 0.5*avg_ecs + 0.5*avg_cpq
-    df["ensemble_tags"] = [tag.replace("_PRED","") for tag in top_scoring_index]
+    df["ensemble_tags"] = top_scoring_index
     df["ensemble_structures"] = row[top_scoring_index].values
     df["ensemble_structures_ecs"] = top_scoring_by_ecs.values
     

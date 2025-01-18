@@ -219,6 +219,24 @@ class PredictionDB:
             (PredictionStatus.FAILED.value, error_hash, predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
         ).close()
 
+    def get_predictions(self, sequence: str, reactivities: list[float], predictors: list[str]):
+        with closing(self._cx.execute(
+            f'''
+            SELECT predictors.name, structures.structure
+            FROM
+                predictions
+                LEFT JOIN structures on structures.id=predictions.structure
+                LEFT JOIN predictors on predictors.id=predictions.predictor
+            WHERE
+                predictor in (SELECT id FROM predictors WHERE name in ({','.join('?'*len(predictors))}))
+                AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
+                AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
+                AND status=(SELECT id FROM status WHERE name=?)
+            ''',
+            (*predictors, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
+        )) as cur:
+            return {predictor: structure for (predictor, structure) in cur.fetchall()}
+
 @dataclass
 class Result:
     predictor: str

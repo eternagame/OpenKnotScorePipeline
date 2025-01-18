@@ -6,8 +6,10 @@ from openknotscore.cli import OKSPConfig
 from openknotscore.substation.runners.slurm import SlurmRunner
 
 class Config(OKSPConfig):
-    source_files = path.join(path.dirname(__file__), 'source_rdats/*')
     db_path = path.join(path.dirname(__file__), 'db')
+
+    source_files = path.join(path.dirname(__file__), 'source_rdats/*')
+    
     # When calculating the expected max runtime needed to run tasks, use this multiplier to add
     # some additional buffer to account for underestimates or variation
     # runtime_buffer = 1.15

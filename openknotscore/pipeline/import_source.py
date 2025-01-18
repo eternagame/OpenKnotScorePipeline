@@ -25,7 +25,6 @@ def load_rdat(source_file: str):
     with open(source_file, 'r') as f:
         rdat.load(f)
 
-
     for construct in rdat.constructs.values():
         seqList = []
 

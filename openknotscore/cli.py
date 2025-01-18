@@ -4,11 +4,13 @@ import os
 from os import path
 from datetime import datetime
 import itertools
+from tqdm import tqdm
 import pandas as pd
 from typing import Iterable
 from .pipeline.import_source import load_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
 from .pipeline.prediction.predict import predict, PredictionDB, PredictionStatus
+from .pipeline import scoring
 from .substation.scheduler.domain import Task, Runnable, UtilizedResources
 from .config import OKSPConfig
 
@@ -83,7 +85,7 @@ def run_cli():
         print(f'{datetime.now()} Completed')
     else:
         print(f'{datetime.now()} Loading data...')
-        source_data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))
+        data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))
 
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
             print(f'{datetime.now()} Generating tasks...')
@@ -91,7 +93,7 @@ def run_cli():
             with PredictionDB(pred_db_path, 'c') as preddb:
                 for predictor in config.enabled_predictors:
                     if not predictor.uses_experimental_reactivities:
-                        for sequence in source_data['sequence'].unique():
+                        for sequence in data['sequence'].unique():
                             if all(
                                 preddb.curr_status(name, sequence, None) == PredictionStatus.SUCCESS
                                 for name in predictor.prediction_names
@@ -107,7 +109,7 @@ def run_cli():
                                 )
                             )
                     else:
-                        for sequence, reactivity in source_data[['sequence', 'reactivity']].itertuples(False):
+                        for sequence, reactivity in data[['sequence', 'reactivity']].itertuples(False):
                             if all(
                                 preddb.curr_status(name, sequence, reactivity) == PredictionStatus.SUCCESS
                                 for name in predictor.prediction_names
@@ -136,5 +138,55 @@ def run_cli():
                     config.runner.run(pred_tasks, 'oksp-predict', on_queued)
                 print(f'{datetime.now()} Completed')
     
+        if args.cmd == 'score':
+            prediction_names = itertools.chain.from_iterable(predictor.prediction_names for predictor in config.enabled_predictors)
+            tqdm.pandas('Retrieving predictions')
+            with PredictionDB(pred_db_path, 'c') as preddb:
+                preds = data.progress_apply(
+                    lambda row: preddb.get_predictions(row['sequence'], row.get('reactivities'), prediction_names),
+                    axis=1,
+                    result_type='expand'
+                )
+                data = pd.merge(data,preds,how="left",left_index=True,right_index=True)
+            
+            def getECSperRow(row):
+                df = row[prediction_names].apply(
+                    scoring.calculateEternaClassicScore,
+                    args=(row['reactivity'], row['score_start_idx'] - 1, row['score_end_idx'] - 1),
+                    filter_singlets=config.filter_singlets
+                )
+                df = df.add_suffix('_ECS')
+                return df
+
+            tqdm.pandas(desc="Calculating Eterna Classic Score")
+            ecs = data.progress_apply(getECSperRow,axis=1,result_type='expand')
+            data = pd.merge(data,ecs,how="left",left_index=True,right_index=True)
+
+            def getCPQperRow(row):
+                # Apply the scoring function to each model prediction in the row
+                df = row[prediction_names].apply(
+                    scoring.calculateCrossedPairQualityScore,
+                    args=(row['reactivity'], row['score_start_idx'] - 1, row['score_end_idx'] - 1),
+                    filter_singlets=config.filter_singlets
+                )
+                df = df.add_suffix('_CPQ')
+                return df
+
+            tqdm.pandas(desc="Calculating Crossed Pair Quality Score")
+            cpq = data.progress_apply(getCPQperRow,axis=1,result_type='expand')
+            data = pd.merge(data,cpq,how="left",left_index=True,right_index=True)
+
+            def getOKSperRow(row):
+                # Missing or failed structures should not be considered as candidates
+                tags = [tag for tag in prediction_names if not pd.isna(row[tag])]
+                return scoring.calculateOpenKnotScore(row, tags)
+
+            tqdm.pandas(desc="Calculating OpenKnotScore")
+            oks = data.progress_apply(getOKSperRow,axis=1)
+            data = pd.merge(data,oks,how="left",left_index=True,right_index=True)
+
+            for output in config.output_configs:
+                output.write(data, config)
+
 if __name__ == '__main__':
     run_cli()
