@@ -93,7 +93,7 @@ def run_cli():
                     if not predictor.uses_experimental_reactivities:
                         for sequence in source_data['sequence'].unique():
                             if all(
-                                preddb.curr_status(name, sequence, None) != PredictionStatus.SUCCESS
+                                preddb.curr_status(name, sequence, None) == PredictionStatus.SUCCESS
                                 for name in predictor.prediction_names
                             ): continue
                             resources = predictor.approximate_resources(sequence)
@@ -109,7 +109,7 @@ def run_cli():
                     else:
                         for sequence, reactivity in source_data[['sequence', 'reactivity']].itertuples(False):
                             if all(
-                                preddb.curr_status(name, sequence, reactivity) != PredictionStatus.SUCCESS
+                                preddb.curr_status(name, sequence, reactivity) == PredictionStatus.SUCCESS
                                 for name in predictor.prediction_names
                             ): continue
                             resources = predictor.approximate_resources(sequence)
