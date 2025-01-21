@@ -176,10 +176,11 @@ class SlurmRunner(Runner):
     @staticmethod
     def _srun_queue(dbpath: str, queue: DBQueue, finished_queues: multiprocessing.Queue):
         srun(
-            ['python', '-c', f'from openknotscore.substation.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue.id})'],
+            ['/usr/bin/env', 'python', '-c', f'from openknotscore.substation.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue.id})'],
             cpus=queue.cpus,
             gpu_cmode='shared' if queue.gpu_id != None else None,
-            cuda_visible_devices=queue.gpu_id
+            cuda_visible_devices=queue.gpu_id,
+            export='ALL'
         )
         finished_queues.put(queue)
 
@@ -202,7 +203,8 @@ def srun(
     command: list[str],
     cpus: int = None,
     gpu_cmode: str = None,
-    cuda_visible_devices: str = None
+    cuda_visible_devices: str = None,
+    export: str = None
 ):
     args = ['srun']
     environ = {**os.environ}
@@ -212,6 +214,9 @@ def srun(
     
     if gpu_cmode is not None:
         args.append(f'--gpu_cmode={gpu_cmode}')
+
+    if export is not None:
+        args.append(f'--export={export}')
 
     if cuda_visible_devices is not None:
         environ['CUDA_VISIBLE_DEVICES'] = cuda_visible_devices
