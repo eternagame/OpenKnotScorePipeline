@@ -108,11 +108,13 @@ class SlurmRunner(Runner):
                 f'python -c "from openknotscore.substation.runners.slurm import SlurmRunner; SlurmRunner.run_serialized_allocation(\'{dbpath}\', {comp_config.id}, {'$SLURM_ARRAY_TASK_ID' if array_size > 1 else 0})"'
             ]
             if self.init_script: cmds.insert(0, self.init_script)
+
+            max_runtime = self.config_max_runtime(comp_config)
             sbatch(
                 cmds,
                 f'{job_name}-{idx}' if len(schedule.compute_configurations) > 1 else job_name,
                 path.join(self.db_path, f'slurm-logs'),
-                timeout=self.config_max_runtime(comp_config),
+                timeout=f'{max_runtime // 60}:{max_runtime % 60}',
                 partition=self.partitions,
                 cpus=self.config_max_cpus(comp_config),
                 gpus=max_gpus if max_gpus > 0 else None,

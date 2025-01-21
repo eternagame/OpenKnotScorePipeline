@@ -4,6 +4,7 @@ import os
 from os import path
 from datetime import datetime
 import itertools
+import math
 from tqdm import tqdm
 import pandas as pd
 from typing import Iterable
@@ -45,7 +46,7 @@ def run_cli():
                 Task(
                     Runnable.create(generate_predictor_resource_model)(predictor),
                     UtilizedResources(
-                        MODEL_TIMEOUT * config.runtime_buffer, MODEL_TIMEOUT, MODEL_TIMEOUT,
+                        math.ceil(MODEL_TIMEOUT * config.runtime_buffer), MODEL_TIMEOUT, MODEL_TIMEOUT,
                         args.cpus,
                         args.max_memory * 1024 * 1024 * config.memory_buffer,
                         args.max_gpu_memory * config.gpu_memory_buffer if predictor.gpu else 0
@@ -99,9 +100,9 @@ def run_cli():
                                 for name in predictor.prediction_names
                             ): continue
                             resources = predictor.approximate_resources(sequence)
-                            resources.max_runtime *= config.runtime_buffer
-                            resources.memory *= config.memory_buffer
-                            resources.gpu_memory *= config.gpu_memory_buffer
+                            resources.max_runtime = math.ceil(resources.max_runtime * config.runtime_buffer)
+                            resources.memory = math.ceil(resources.memory * config.memory_buffer)
+                            resources.gpu_memory = math.ceil(resources.gpu_memory * config.gpu_memory_buffer)
                             pred_tasks.append(
                                 Task(
                                     Runnable.create(predict)(predictor, sequence, None, pred_db_path),
