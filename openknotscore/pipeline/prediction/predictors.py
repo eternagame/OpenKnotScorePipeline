@@ -61,7 +61,7 @@ class ArnieMfePredictor(Predictor):
     def prediction_names(self):
         return [self.name]
 
-    def run(self, seq: str):
+    def run(self, seq: str, reactivities: list[float]):
         return {
             self.name: mfe(seq, self.package_name, **self.arnie_kwargs)
         }
@@ -204,7 +204,7 @@ class ShapifyHfoldPredictor(Predictor):
         self.name = as_name
         self.prediction_names = [as_name]
 
-    def run(self, seq: str):
+    def run(self, seq: str, reactivities: list[float]):
         hfold_return = subprocess.run([self.hfold_location+"/HFold_iterative", "--s", seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
 
         # Pull structure out of Shapify output
