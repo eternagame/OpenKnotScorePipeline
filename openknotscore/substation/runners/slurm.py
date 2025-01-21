@@ -29,6 +29,7 @@ class SlurmRunner(Runner):
     max_gpus: int = 0
     gpu_memory: int = 0
     constraints: str = None
+    init_script: str = None
 
     def _cost(self, cpus: int, gpus: int, memory: int, runtime: int):
         actual_cores = max(cpus, math.ceil(memory / self.max_mem_per_core))
@@ -103,8 +104,12 @@ class SlurmRunner(Runner):
             allocated_jobs += array_size
 
             max_gpus = self.config_max_gpus(comp_config)
+            cmds = [
+                f'python -c "from openknotscore.substation.runners.slurm import SlurmRunner; SlurmRunner.run_serialized_allocation(\'{dbpath}\', {comp_config.id}, {'$SLURM_ARRAY_TASK_ID' if array_size > 1 else 0})"'
+            ]
+            if self.init_script: cmds.insert(0, self.init_script)
             sbatch(
-                f'python -c "from openknotscore.substation.runners.slurm import SlurmRunner; SlurmRunner.run_serialized_allocation(\'{dbpath}\', {comp_config.id}, {'$SLURM_ARRAY_TASK_ID' if array_size > 1 else 0})"',
+                cmds,
                 f'{job_name}-{idx}' if len(schedule.compute_configurations) > 1 else job_name,
                 path.join(self.db_path, f'slurm-logs'),
                 timeout=self.config_max_runtime(comp_config),
