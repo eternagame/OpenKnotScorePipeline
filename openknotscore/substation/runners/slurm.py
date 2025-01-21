@@ -222,7 +222,7 @@ def srun(
         print(f'DRY RUN SRUN COMMAND: {args}\n')
         return 0
     else:
-        run(args, input=input, text=True, cwd=os.getcwd())
+        run(args, text=True, cwd=os.getcwd())
 
 def sbatch(
     commands: Union[str, list[str]],
