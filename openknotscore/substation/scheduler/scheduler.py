@@ -192,11 +192,14 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
             leaf_queues.sort(key=lambda queue: queue.chain_utilized_resources.avg_runtime)
         
         queue = leaf_queues[0]
+        if queue.chain_utilized_resources.max_runtime + resource_request.max_runtime > allocation.configuration.runtime:
+            leaf_queues.pop(0)
+            continue
+
         if (
             queue.utilized_resources.cpus < resource_request.cpus
             or queue.utilized_resources.memory < resource_request.memory
             or queue.utilized_resources.gpu_memory < resource_request.gpu_memory
-            or queue.chain_utilized_resources.max_runtime + resource_request.max_runtime > allocation.configuration.runtime
         ):
             # First see if there are unallocated resoruces we can use to make the queue fit this task
             resize_success = recover_resources(resource_request, queue)
@@ -265,15 +268,15 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
 def schedule_task(task: Task, queue: TaskQueue):
     task.queue = queue
     queue.tasks.append(task)
-    queue.utilized_resources.min_runtime +=  task.utilized_resources.min_runtime
-    queue.utilized_resources.avg_runtime +=  task.utilized_resources.avg_runtime
-    queue.utilized_resources.max_runtime +=  task.utilized_resources.max_runtime
-    queue.chain_utilized_resources.min_runtime +=  task.utilized_resources.min_runtime
-    queue.chain_utilized_resources.avg_runtime +=  task.utilized_resources.avg_runtime
-    queue.chain_utilized_resources.max_runtime +=  task.utilized_resources.max_runtime
-    queue.allocation.utilized_resources.min_runtime +=  task.utilized_resources.min_runtime
-    queue.allocation.utilized_resources.avg_runtime +=  task.utilized_resources.avg_runtime
-    queue.allocation.utilized_resources.max_runtime +=  task.utilized_resources.max_runtime
+    queue.utilized_resources.min_runtime += task.utilized_resources.min_runtime
+    queue.utilized_resources.avg_runtime += task.utilized_resources.avg_runtime
+    queue.utilized_resources.max_runtime += task.utilized_resources.max_runtime
+    queue.chain_utilized_resources.min_runtime += task.utilized_resources.min_runtime
+    queue.chain_utilized_resources.avg_runtime += task.utilized_resources.avg_runtime
+    queue.chain_utilized_resources.max_runtime += task.utilized_resources.max_runtime
+    queue.allocation.utilized_resources.min_runtime += task.utilized_resources.min_runtime
+    queue.allocation.utilized_resources.avg_runtime += task.utilized_resources.avg_runtime
+    queue.allocation.utilized_resources.max_runtime += task.utilized_resources.max_runtime
 
 def fill_allocation(
     allocation: ComputeAllocation,
