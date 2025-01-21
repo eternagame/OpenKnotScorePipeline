@@ -284,7 +284,7 @@ def fill_allocation(
     for bucket in scheduling_priorities:
         slots = slots_for_task(bucket, allocation, schedule)
         tasks = task_buckets[bucket]
-        while (queue := next(slots, None)) and tasks:
+        while tasks and (queue := next(slots, None)):
             schedule_task(tasks.pop(), queue)
 
 def schedule_tasks(
