@@ -1,4 +1,4 @@
-arnie==0.2.1
+arnie==0.2.2
 matplotlib==3.9.2
 numpy==2.1.2
 pandas==2.2.3
