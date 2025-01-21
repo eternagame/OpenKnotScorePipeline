@@ -138,7 +138,13 @@ class TaskDB:
             '''
             INSERT INTO queues VALUES(?, ?, ?, ?, ?, ?)
             ''',
-            itertools.chain.from_iterable(((queue.id, alloc.configuration.id, allocidx, queue.utilized_resources.cpus, queue.gpu_id, queue.parent_queue.id if queue.parent_queue else None) for queue in alloc.queues) for (allocidx, alloc) in enumerate(schedule.nonempty_compute_allocations()))
+            itertools.chain.from_iterable(
+                (
+                    (queue.id, alloc.configuration.id, allocidx, queue.utilized_resources.cpus, queue.gpu_id, queue.parent_queue.id if queue.parent_queue else None)
+                    for queue in alloc.nonempty_queues()
+                )
+                for (allocidx, alloc) in enumerate(schedule.nonempty_compute_allocations())
+            )
         ).close()
 
     def tasks_for_queue(self, id: int):
