@@ -190,12 +190,14 @@ class SlurmRunner(Runner):
             finished_queues = multiprocessing.Queue()
             running_queues = 0
             for queue in db.queues_for_allocation(compute_config_id, allocation_id):
+                print('Triggering srun for base queue', queue.id)
                 multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
                 running_queues += 1
             while running_queues > 0:
                 finished: DBQueue = finished_queues.get()
                 running_queues -= 1
                 for queue in db.children_for_queue(finished.id):
+                    print('Triggering srun for queue', queue.id, 'child of', finished.id)
                     multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
                     running_queues += 1
 
@@ -208,6 +210,11 @@ def srun(
 ):
     args = ['srun']
     environ = {**os.environ}
+
+    args.append('-n1')
+
+    if 'SUBSTATION_BATCH_OUTPUT_PATTERN' in os.environ:
+        args.append(f'--output={os.environ["SUBSTATION_BATCH_OUTPUT_PATTERN"]}')
 
     if cpus is not None:
         args.append(f'--cpus-per-task={cpus}')
@@ -248,12 +255,14 @@ def sbatch(
 ):
     args = ['sbatch']
 
+    output_pattern = ''
     if job_name is not None:
         args.append(f'--job-name={job_name}')
         job_id = '%j'
         if array is not None:
             job_id = '%A_%a'
-        args.append(f'--output={output_dir}/{job_name}-{job_id}.%s.txt')
+        output_pattern = f'{output_dir}/{job_name}-{job_id}.%s.txt'
+        args.append(f'--output={output_pattern}')
     
     if timeout is not None:
         args.append(f'--time={timeout}')
@@ -289,12 +298,15 @@ def sbatch(
         args.append(f'--array={array}')
 
     shebang = '#!/bin/sh'
-    set = 'set -e'
+    setsh = 'set -e'
     if echo_cmd:
-        set += 'x'
+        setsh += 'x'
+    export_outpattern = ''
+    if output_pattern:
+        export_outpattern = f'export SUBSTATION_BATCH_OUTPUT_PATTERN={output_pattern}\n\n'
     body = (commands if isinstance(commands, str) else '\n'.join(commands))
 
-    input = f'{shebang}\n\n{set}\n\n{body}'
+    input = f'{shebang}\n\n{setsh}\n\n{export_outpattern}{body}'
 
     if os.environ.get('SUBSTATION_RUNNER_DRY_RUN') == 'true':
         print(f'DRY RUN SBATCH STDIN:\n{input}\n-------')

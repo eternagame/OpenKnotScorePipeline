@@ -40,7 +40,8 @@ class Runner(ABC):
         return dbpath
 
     @staticmethod
-    def run_serialized_queue(dbpath: str, id: bytes):
+    def run_serialized_queue(dbpath: str, id: int):
+        print('Running erialized queue', id)
         with TaskDB(dbpath) as db:
             for task in db.tasks_for_queue(id):
                 task.run()
