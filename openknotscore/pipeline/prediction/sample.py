@@ -169,8 +169,9 @@ def sample_resources(predictor: Predictor):
                     seqlen_range = (low, high)
             # This would presumably mean lengths of 1 through MIN_SAMPLES all timed out, but will include
             # the sanity check just in case so we don't run into an infinite loop
-            if seqlen_range[0] == seqlen_range[1]:
-                raise RuntimeError(f'Couldn\'t find valid sequence length to sample - current samples: {samples}')
+            if abs(seqlen_range[0] - seqlen_range[1]) < 2:
+                print(f'Couldn\'t find valid sequence length to sample, bailing early - current samples: {samples}')
+                return samples
 
             seqlen = (seqlen_range[0] + seqlen_range[1]) // 2
 
