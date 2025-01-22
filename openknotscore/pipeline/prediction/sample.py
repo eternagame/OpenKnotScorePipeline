@@ -80,13 +80,13 @@ def sample_resources_at_length(predictor: Predictor, seqlen: int):
 
     # Same but for reactivity
     test_reactivities = [
-        [math.nan for _ in range(seqlen)],
+        [None for _ in range(seqlen)],
         [0 for _ in range(seqlen)],
         [0.5 for _ in range(seqlen)],
         [1 for _ in range(seqlen)],
         [random.random() for _ in range(seqlen)],
         list(itertools.chain.from_iterable([[0,1] for _ in range(seqlen // 2)])) + [0] * (seqlen % 2),
-    ] if predictor.uses_experimental_reactivities else [[math.nan for _ in range(seqlen)]]
+    ] if predictor.uses_experimental_reactivities else [[None for _ in range(seqlen)]]
 
     test_cases = list(itertools.product(test_seqs, test_reactivities))
     # Run each one a few times to factor in noise

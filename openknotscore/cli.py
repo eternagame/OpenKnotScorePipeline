@@ -131,20 +131,28 @@ def run_cli():
                 config.runner.forecast(pred_tasks)
             else:
                 print(f'{datetime.now()} Starting run...')
-                with PredictionDB(pred_db_path, 'c') as preddb:
-                    def on_queued(tasks: Iterable[Task]):
+                def on_queued(tasks: Iterable[Task]):
+                    with PredictionDB(pred_db_path, 'c') as preddb:
                         preddb.upsert_queued(
                             (task.runnable.args[0], task.runnable.args[1], task.runnable.args[2]) for task in tasks
                         )
-                    config.runner.run(pred_tasks, 'oksp-predict', on_queued)
+                config.runner.run(pred_tasks, 'oksp-predict', on_queued)
                 print(f'{datetime.now()} Completed')
     
         if args.cmd == 'score':
-            prediction_names = itertools.chain.from_iterable(predictor.prediction_names for predictor in config.enabled_predictors)
-            tqdm.pandas('Retrieving predictions')
+            nonreactive_prediction_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in config.enabled_predictors
+                if not predictor.uses_experimental_reactivities
+            ))
+            reactive_prediction_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in config.enabled_predictors
+                if predictor.uses_experimental_reactivities
+            ))
+            prediction_names = [*nonreactive_prediction_names, *reactive_prediction_names]
+            tqdm.pandas(desc='Retrieving predictions')
             with PredictionDB(pred_db_path, 'c') as preddb:
                 preds = data.progress_apply(
-                    lambda row: preddb.get_predictions(row['sequence'], row.get('reactivities'), prediction_names),
+                    lambda row: preddb.get_predictions(row['sequence'], row.get('reactivity'), nonreactive_prediction_names, reactive_prediction_names),
                     axis=1,
                     result_type='expand'
                 )

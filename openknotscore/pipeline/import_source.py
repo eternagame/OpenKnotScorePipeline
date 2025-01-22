@@ -62,8 +62,8 @@ def load_rdat(source_file: str):
                 score_end_idx = len(seq) - BLANK_OUT3
 
             # Get reactivity data and errors
-            reactivity = [float('nan')]*BLANK_OUT5 + sequence.values + [float('nan')]*BLANK_OUT3
-            errors = [float('nan')]*BLANK_OUT5 + sequence.errors + [float('nan')]*BLANK_OUT3
+            reactivity = [None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3
+            errors = [None]*BLANK_OUT5 + sequence.errors + [None]*BLANK_OUT3
 
             # Create a dataframe from this row
             row = {
