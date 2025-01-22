@@ -25,6 +25,9 @@ class LocalRunner(Runner):
     def _run(self, f):
         f()
 
+    def flush_deferred(self, _):
+        flush_deferred()
+
     def run(self, tasks: list[Task], job_name: str, on_queue: Callable[[Iterable[Task]], None] | None = None):
         if on_queue:
             on_queue(tasks)
@@ -37,8 +40,9 @@ class LocalRunner(Runner):
             # Iterate over results so that we catch errors
             for _ in pool.map(self._run, [task.runnable.run for task in tasks]):
                 pass
-
-        flush_deferred()
+            # Run flush_deferred against the collected deferred tasks accumulated in each worker process
+            for _ in pool.map(self.flush_deferred, [x for x in range(self.max_processes)]):
+                pass
 
     def forecast(self, tasks):
         # This is all very unscientific (tasks may utilize an arbitrary number of CPUs,

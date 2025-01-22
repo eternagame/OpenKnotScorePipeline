@@ -2,6 +2,8 @@ from typing import Literal
 from abc import ABC, abstractmethod
 import itertools
 import glob
+import tempfile
+import os
 from os import path
 import math
 import pandas as pd
@@ -22,6 +24,8 @@ class RDATOutput(OutputConfig):
         self.max_per_rdat = max_per_rdat
 
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
+        os.makedirs(self.output_dir, exist_ok=True)
+
         source_globs = config.source_files
         _source_globs = [source_globs] if type(source_globs) == str else source_globs
         source_files = list(itertools.chain.from_iterable(glob.glob(source) for source in _source_globs))
@@ -43,7 +47,7 @@ class RDATOutput(OutputConfig):
                     
                     # There may be no processed data (OKS, predictions) associated with the sequence
                     # if the sequence had low-quality or missing reactivity data, so we skip those rows
-                    row = df.loc[(df['sequence'] == seq) & (df['reactivity']) == [float('nan')]*BLANK_OUT5 + sequence.values + [float('nan')]*BLANK_OUT3].squeeze()
+                    row = df.loc[(df['sequence'] == seq) & (df['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3))].squeeze()
                     if row.empty:
                         continue
 
@@ -55,16 +59,22 @@ class RDATOutput(OutputConfig):
                     annotationList.append(f"best_fit:structures:{','.join(row['ensemble_structures'])}")
                     annotationList.append(f"best_fit:eterna_classic_scores:{','.join([f'{v:.6f}' for v in row['ensemble_structures_ecs']])}")
             
-            rdat.save(f'{self.output_dir}/{path.basename(source)}')
+            tempout = tempfile.NamedTemporaryFile(delete=False)
+            tempout.close()
+            rdat.save(tempout.name)
 
-            if self.max_per_rdat is not None:
-                num_splits = math.ceil(len(data)/self.max_per_rdat)
+            if self.max_per_rdat is None:
+                with open(tempout.name) as rf:
+                    with open(f'{self.output_dir}/{path.basename(source)}', 'w') as wf:
+                        wf.write(rf.read())
+            else:
+                num_splits = math.ceil(len(list(rdat.constructs.values())[0].data)/self.max_per_rdat)
 
                 for i in range(num_splits):
                     # Reset the RDAT object
                     rdat = rdat_kit.RDATFile()
-                    with open(source, 'r') as f:
-                        rdat.load(f'{self.output_dir}/{path.basename(source)}')
+                    with open(tempout.name, 'r') as f:
+                        rdat.load(f)
 
                     for (construct_name, construct) in rdat.constructs.items():
                         data = rdat.constructs[construct_name].data
@@ -74,6 +84,8 @@ class RDATOutput(OutputConfig):
                         rdat.errors[construct_name] = [row.errors for row in data[i*self.max_per_rdat:(i+1)*self.max_per_rdat]]
 
                     rdat.save(f'{self.output_dir}/{path.basename(source).removesuffix('.rdat')}-{i+1}.rdat')
+            
+            os.unlink(tempout.name)
 
 class CSVOutput(OutputConfig):
     def __init__(self, output_path: str, sep: str=',', compression: Literal['snappy', 'gzip', 'brotli', 'lz4', 'zstd'] | None = None):
@@ -82,6 +94,7 @@ class CSVOutput(OutputConfig):
         self.compression = compression
 
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
+        os.makedirs(path.dirname(self.output_path), exist_ok=True)
         df.to_csv(self.output_path, sep=self.sep, compression=self.compression)
 
 class ParquetOutput(OutputConfig):
@@ -90,6 +103,7 @@ class ParquetOutput(OutputConfig):
         self.compression = compression
 
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
+        os.makedirs(path.dirname(self.output_path), exist_ok=True)
         df.to_parquet(self.output_path, compression=self.compression)
 
 class OKSPConfig(ABC):

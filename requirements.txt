@@ -2,6 +2,7 @@ arnie==0.2.2
 matplotlib==3.9.2
 numpy==2.1.2
 pandas==2.2.3
+pyarrow==19.0.0
 rdat-kit==1.6.3
 tqdm==4.66.5
 scikit-learn==1.6.0

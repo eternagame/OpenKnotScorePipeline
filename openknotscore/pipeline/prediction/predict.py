@@ -36,19 +36,25 @@ class PredictionDB:
         else:
             raise ValueError(f"Flag must be one of 'r', 'w', 'c', or 'n', not {flag!r}")
 
-        self._cx = sqlite3.connect(f"{pathobj.absolute().as_uri()}?mode={cxflag}", uri=True)
+        self._cx = sqlite3.connect(f"{pathobj.absolute().as_uri()}?mode={cxflag}", uri=True, timeout=60)
 
         self._cx.executescript(
             f'''
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT UNIQUE NOT NULL,
+                value TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS predictors (
                 id INTEGER PRIMARY KEY,
                 name TEXT UNIQUE NOT NULL
             );
             CREATE TABLE IF NOT EXISTS sequences (
+                id INTEGER PRIMARY KEY,
                 sequence TEXT NOT NULL,
                 hash BLOB UNIQUE NOT NULL
             );
             CREATE TABLE IF NOT EXISTS reactivities (
+                id INTEGER PRIMARY KEY,
                 reactivities BLOB NOT NULL,
                 hash BLOB UNIQUE NOT NULL
             );
@@ -57,10 +63,12 @@ class PredictionDB:
                 name TEXT UNIQUE NOT NULL
             );
             CREATE TABLE IF NOT EXISTS structures (
+                id INTEGER PRIMARY KEY,
                 structure TEXT NOT NULL,
                 hash BLOB UNIQUE NOT NULL
             );
             CREATE TABLE IF NOT EXISTS errors (
+                id INTEGER PRIMARY KEY,
                 error TEXT NOT NULL,
                 hash BLOB UNIQUE NOT NULL
             );
@@ -74,6 +82,7 @@ class PredictionDB:
             CREATE UNIQUE INDEX IF NOT EXISTS prediction_args ON predictions(predictor, sequence, reactivities); 
             '''
         )
+        self._cx.execute("INSERT INTO meta VALUES('version', '1') ON CONFLICT DO UPDATE SET value='1'")
         self._cx.executemany('INSERT INTO status(name) VALUES (?) ON CONFLICT DO NOTHING', [(PredictionStatus.SUCCESS.value,), (PredictionStatus.FAILED.value,), (PredictionStatus.QUEUED.value,)])
 
     def __enter__(self):
@@ -95,8 +104,8 @@ class PredictionDB:
             SELECT status.name FROM predictions LEFT JOIN status on status.id=predictions.status
             WHERE
                 predictor=(SELECT id FROM predictors WHERE name=?)
-                AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
-                AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
+                AND sequence=(SELECT id FROM sequences WHERE hash=?)
+                AND reactivities=(SELECT id FROM reactivities WHERE hash=?)
             ''',
             (predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
         )) as cur:
@@ -118,20 +127,20 @@ class PredictionDB:
                 if not sequence_hash:
                     sequence_hash = xxh3_64_digest(sequence)
                     hash_cache[id(sequence)] = sequence_hash
-                    self._cx.execute('INSERT INTO sequences VALUES(?, ?) ON CONFLICT DO NOTHING', (sequence, sequence_hash)).close()
+                    self._cx.execute('INSERT INTO sequences(sequence, hash) VALUES(?, ?) ON CONFLICT DO NOTHING', (sequence, sequence_hash)).close()
                 reactivities_hash = hash_cache.get(id(reactivities))
                 if not reactivities_hash:
                     reactivities_pkl = pickle.dumps(reactivities)
                     reactivities_hash = xxh3_64_digest(reactivities_pkl)
                     hash_cache[id(reactivities)] = reactivities_hash
-                    self._cx.execute('INSERT INTO reactivities VALUES(?, ?) ON CONFLICT DO NOTHING', (reactivities_pkl, reactivities_hash)).close()
+                    self._cx.execute('INSERT INTO reactivities(reactivities, hash) VALUES(?, ?) ON CONFLICT DO NOTHING', (reactivities_pkl, reactivities_hash)).close()
                 
                 self._cx.execute(
                     '''
                     INSERT INTO predictions(predictor, sequence, reactivities, status) VALUES(
                         (SELECT id FROM predictors WHERE name=?),
-                        (SELECT ROWID FROM sequences WHERE hash=?),
-                        (SELECT ROWID FROM reactivities WHERE hash=?),
+                        (SELECT id FROM sequences WHERE hash=?),
+                        (SELECT id FROM reactivities WHERE hash=?),
                         (SELECT id FROM status where name=?)
                     ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?)
                     ''',
@@ -151,29 +160,29 @@ class PredictionDB:
                 if not sequence_hash:
                     sequence_hash = xxh3_64_digest(sequence)
                     hash_cache[id(sequence)] = sequence_hash
-                    self._cx.execute('INSERT INTO sequences VALUES(?, ?) ON CONFLICT DO NOTHING', (sequence, sequence_hash)).close()
+                    self._cx.execute('INSERT INTO sequences(sequence, hash) VALUES(?, ?) ON CONFLICT DO NOTHING', (sequence, sequence_hash)).close()
                 reactivities_hash = hash_cache.get(id(reactivities))
                 if not reactivities_hash:
                     reactivities_pkl = pickle.dumps(reactivities)
                     reactivities_hash = xxh3_64_digest(reactivities_pkl)
                     hash_cache[id(reactivities)] = reactivities_hash
-                    self._cx.execute('INSERT INTO reactivities VALUES(?, ?) ON CONFLICT DO NOTHING', (reactivities_pkl, reactivities_hash)).close()
+                    self._cx.execute('INSERT INTO reactivities(reactivities, hash) VALUES(?, ?) ON CONFLICT DO NOTHING', (reactivities_pkl, reactivities_hash)).close()
                 structure_hash = hash_cache.get(id(structure))
                 if not structure_hash:
                     structure_hash = xxh3_64_digest(structure)
                     hash_cache[id(structure)] = structure_hash
-                    self._cx.execute('INSERT INTO structures VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
+                    self._cx.execute('INSERT INTO structures(structure, hash) VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
                 
                 if override:
                     self._cx.execute(
                         f'''
                         INSERT INTO predictions(predictor, sequence, reactivities, result, status) VALUES(
                             (SELECT id FROM predictors WHERE name=?),
-                            (SELECT ROWID FROM sequences WHERE hash=?),
-                            (SELECT ROWID FROM reactivities WHERE hash=?),
-                            (SELECT ROWID FROM result WHERE hash=?),
+                            (SELECT id FROM sequences WHERE hash=?),
+                            (SELECT id FROM reactivities WHERE hash=?),
+                            (SELECT id FROM structures WHERE hash=?),
                             (SELECT id FROM status where name=?)
-                        ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM result WHERE hash=?)
+                        ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?), result=(SELECT id FROM structures WHERE hash=?)
                         ''',
                         (name, sequence_hash, reactivities_hash, structure_hash, PredictionStatus.SUCCESS.value, PredictionStatus.SUCCESS.value),
                     ).close()
@@ -182,58 +191,62 @@ class PredictionDB:
                         f'''
                         INSERT INTO predictions(predictor, sequence, reactivities, result, status) VALUES(
                             (SELECT id FROM predictors WHERE name=?),
-                            (SELECT ROWID FROM sequences WHERE hash=?),
-                            (SELECT ROWID FROM reactivities WHERE hash=?),
-                            (SELECT ROWID FROM result WHERE hash=?),
+                            (SELECT id FROM sequences WHERE hash=?),
+                            (SELECT id FROM reactivities WHERE hash=?),
+                            (SELECT id FROM structures WHERE hash=?),
                             (SELECT id FROM status where name=?)
-                        ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM result WHERE hash=?) WHERE status=(SELECT id FROM status where name=?)
+                        ) ON CONFLICT DO UPDATE SET status=(SELECT id FROM status where name=?), result=(SELECT id FROM structures WHERE hash=?) WHERE status=(SELECT id FROM status where name=?)
                         ''',
                         (name, sequence_hash, reactivities_hash, structure_hash, PredictionStatus.SUCCESS.value, PredictionStatus.SUCCESS.value, PredictionStatus.QUEUED.value),
                     ).close()
 
     def update_success(self, predictor: str, sequence: str, reactivities: list[float], structure: str):
         structure_hash = xxh3_64_digest(structure)
-        self._cx.execute('INSERT INTO structures VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
+        self._cx.execute('INSERT INTO structures(structure, hash) VALUES(?, ?) ON CONFLICT DO NOTHING', (structure, structure_hash)).close()
         self._cx.execute(
             '''
-            UPDATE predictions SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM structures WHERE hash=?)
+            UPDATE predictions SET status=(SELECT id FROM status where name=?), result=(SELECT id FROM structures WHERE hash=?)
             WHERE
                 predictor=(SELECT id FROM predictors WHERE name=?)
-                AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
-                AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
+                AND sequence=(SELECT id FROM sequences WHERE hash=?)
+                AND reactivities=(SELECT id FROM reactivities WHERE hash=?)
             ''',
             (PredictionStatus.SUCCESS.value, structure_hash, predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
         ).close()
 
     def update_failure(self, predictor: str, sequence: str, reactivities: list[float], error: str):
         error_hash = xxh3_64_digest(error)
-        self._cx.execute('INSERT INTO errors VALUES(?, ?) ON CONFLICT DO NOTHING', (error, error_hash)).close()
+        self._cx.execute('INSERT INTO errors(error, hash) VALUES(?, ?) ON CONFLICT DO NOTHING', (error, error_hash)).close()
         self._cx.execute(
             '''
-            UPDATE predictions SET status=(SELECT id FROM status where name=?), result=(SELECT ROWID FROM errors WHERE hash=?)
+            UPDATE predictions SET status=(SELECT id FROM status where name=?), result=(SELECT id FROM errors WHERE hash=?)
             WHERE
                 predictor=(SELECT id FROM predictors WHERE name=?)
-                AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
-                AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
+                AND sequence=(SELECT id FROM sequences WHERE hash=?)
+                AND reactivities=(SELECT id FROM reactivities WHERE hash=?)
             ''',
             (PredictionStatus.FAILED.value, error_hash, predictor, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
         ).close()
 
-    def get_predictions(self, sequence: str, reactivities: list[float], predictors: list[str]):
+    def get_predictions(self, sequence: str, reactivities: list[float], nonreactive_predictors: list[str], reactive_predictors: list[str]):
         with closing(self._cx.execute(
             f'''
             SELECT predictors.name, structures.structure
             FROM
                 predictions
-                LEFT JOIN structures on structures.id=predictions.structure
+                LEFT JOIN structures on structures.id=predictions.result
                 LEFT JOIN predictors on predictors.id=predictions.predictor
             WHERE
-                predictor in (SELECT id FROM predictors WHERE name in ({','.join('?'*len(predictors))}))
-                AND sequence=(SELECT ROWID FROM sequences WHERE hash=?)
-                AND reactivities=(SELECT ROWID FROM reactivities WHERE hash=?)
-                AND status=(SELECT id FROM status WHERE name=?)
+                status=(SELECT id FROM status WHERE name=?)
+                AND sequence=(SELECT id FROM sequences WHERE hash=?)
+                AND (
+                    (
+                        predictor in (SELECT id FROM predictors WHERE name in ({','.join('?'*len(reactive_predictors))}))
+                        AND reactivities=(SELECT id FROM reactivities WHERE hash=?)
+                    ) OR predictor in (SELECT id FROM predictors WHERE name in ({','.join('?'*len(nonreactive_predictors))}))
+                )
             ''',
-            (*predictors, xxh3_64_digest(sequence), xxh3_64_digest(pickle.dumps(reactivities)))
+            (PredictionStatus.SUCCESS.value, xxh3_64_digest(sequence), *reactive_predictors, xxh3_64_digest(pickle.dumps(reactivities)), *nonreactive_predictors)
         )) as cur:
             return {predictor: structure for (predictor, structure) in cur.fetchall()}
 
