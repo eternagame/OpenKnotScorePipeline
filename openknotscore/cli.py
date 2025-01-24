@@ -33,6 +33,9 @@ def run_cli():
     import_parser = subparsers.add_parser('predict-import', help='import pre-computed structures from another file into the pipeline database')
     import_parser.add_argument(dest='file', help='path to the file to import structures from')
     import_parser.add_argument('--override', dest='override', help='override values in the database if they already exist', default=False)
+    check_failed_parser = subparsers.add_parser('predict-check-failed', help='show information about missing or failed predictions')
+    check_failed_parser.add_argument('--show-errors', action='store_true', dest='show_errors', help='if errors were encountered, print what they were', default=False)
+    check_failed_parser.add_argument('--nrows', type=int, dest='nrows', help='for missing/failed predictions, print the first n rows of source data which failed per unique failure', default=0)
 
     args = parser.parse_args()
 
@@ -141,6 +144,52 @@ def run_cli():
                 config.runner.run(pred_tasks, 'oksp-predict', on_queued)
                 print(f'{datetime.now()} Completed')
     
+        if args.cmd == 'predict-check-failed':
+            nonreactive_prediction_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in config.enabled_predictors
+                if not predictor.uses_experimental_reactivities
+            ))
+            reactive_prediction_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in config.enabled_predictors
+                if predictor.uses_experimental_reactivities
+            ))
+            prediction_names = [*nonreactive_prediction_names, *reactive_prediction_names]
+            tqdm.pandas(desc='Retrieving predictions')
+            with PredictionDB(pred_db_path, 'c') as preddb:
+                errors = data.progress_apply(
+                    lambda row: preddb.get_failed(row['sequence'], row.get('reactivity'), nonreactive_prediction_names, reactive_prediction_names),
+                    axis=1,
+                    result_type='expand'
+                )
+                data = pd.merge(data,errors,how="left",left_index=True,right_index=True)
+                exists = data.progress_apply(
+                    lambda row: preddb.get_prediction_success(row['sequence'], row.get('reactivity'), nonreactive_prediction_names, reactive_prediction_names),
+                    axis=1,
+                    result_type='expand'
+                )
+                data = data.combine_first(exists)
+
+            for col in errors.columns:
+                print(f'Predictor {col} had {errors[col].dropna().nunique()} unique errors across {errors[col].dropna().count()} solutions')
+                if args.show_errors:
+                    print('==============================')
+                    for error in errors[col].dropna().unique():
+                        print(error)
+                        print('==============================')
+                        
+                        if args.nrows > 0:
+                            print(data[[col for col in data.columns if col not in prediction_names]][data[col] == error][:args.nrows].to_string())
+            for col in prediction_names:
+                if not col in data.columns:
+                    print(f'Predictor {col} is not present for any solutions')
+                else:
+                    missing = data[col].isna().sum()
+                    if missing > 0:
+                        print(f'Predictor {col} is missing for {data[col].isna().sum()} solutions')
+                        if args.nrows > 0:
+                            print(data[[col for col in data.columns if col not in prediction_names]][data[col] == error][:args.nrows].to_string())
+            
+
         if args.cmd == 'score':
             nonreactive_prediction_names = list(itertools.chain.from_iterable(
                 predictor.prediction_names for predictor in config.enabled_predictors
