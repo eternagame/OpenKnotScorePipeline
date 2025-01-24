@@ -175,7 +175,7 @@ class SlurmRunner(Runner):
                 for config in nonempty_configs
             ]) / 60 / 60: .2f}')
         print(f'Number of jobs: {len(schedule.nonempty_compute_allocations())}')
-        print(f'Longest job timeout: {max(config.runtime for config in nonempty_configs)} seconds')
+        print(f'Longest job timeout: {max(self.config_max_runtime(config) for config in nonempty_configs)} seconds')
 
     @staticmethod
     def _srun_queue(dbpath: str, queue: DBQueue, finished_queues: multiprocessing.Queue):
