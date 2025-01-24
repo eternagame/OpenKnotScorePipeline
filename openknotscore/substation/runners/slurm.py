@@ -148,34 +148,51 @@ class SlurmRunner(Runner):
         )
 
         max_runtime = 0
-        core_seconds = 0
-        gpu_seconds = 0
+        max_core_seconds = 0
+        max_gpu_seconds = 0
+        max_expected_runtime = 0
+        expected_core_seconds = 0
+        expected_gpu_seconds = 0
         for task in schedule.tasks:
             max_runtime = max(task.utilized_resources.max_runtime, max_runtime)
-            core_seconds += task.utilized_resources.max_runtime * task.utilized_resources.cpus
+            max_expected_runtime = max(task.utilized_resources.avg_runtime, max_expected_runtime)
+            max_core_seconds += task.utilized_resources.max_runtime * task.utilized_resources.cpus
+            expected_core_seconds += task.utilized_resources.avg_runtime * task.utilized_resources.cpus
             if task.queue.gpu_id is not None:
-                gpu_seconds += task.utilized_resources.max_runtime
+                max_gpu_seconds += task.utilized_resources.max_runtime
+                expected_gpu_seconds += task.utilized_resources.avg_runtime
 
         nonempty_configs = schedule.nonempty_compute_configurations()
+        nonempty_allocations = schedule.nonempty_compute_allocations()
 
         print(f'Slurm TRES cost: {sum(
             self._cost(config.cpus, config.gpus, config.memory, config.runtime) * len(config.nonempty_allocations())
             for config in nonempty_configs
         )}')
-        print(f'Longest task runtime: {max_runtime / 60 / 60: .2f} hours ({max_runtime} seconds)')
-        print(f'Active core-hours: {core_seconds / 60 / 60: .2f}')
+        print(f'Longest task runtime (max): {max_runtime / 60 / 60: .2f} hours ({max_runtime} seconds)')
+        print(f'Longest task runtime (expected): {max_expected_runtime / 60 / 60: .2f} hours ({max_expected_runtime} seconds)')
+        print(f'Active core-hours (max): {max_core_seconds / 60 / 60: .2f}')
+        print(f'Active core-hours (expected): {expected_core_seconds / 60 / 60: .2f}')
         print(f'Allocated core-hours: {sum([
             self.config_max_cpus(config) * self.config_max_runtime(config) * len(config.nonempty_allocations())
             for config in nonempty_configs
         ]) / 60 / 60: .2f}')
-        if gpu_seconds > 0:
-            print(f'Active GPU-hours: {gpu_seconds / 60 / 60: .2f}')
+        if max_gpu_seconds > 0:
+            print(f'Active GPU-hours (max): {max_gpu_seconds / 60 / 60: .2f}')
+            print(f'Active GPU-hours (expected): {expected_gpu_seconds / 60 / 60: .2f}')
             print(f'Allocated GPU-hours: {sum([
                 self.config_max_gpus(config) * self.config_max_runtime(config) * len(config.nonempty_allocations())
                 for config in nonempty_configs
             ]) / 60 / 60: .2f}')
-        print(f'Number of jobs: {len(schedule.nonempty_compute_allocations())}')
-        print(f'Longest job timeout: {max(self.config_max_runtime(config) for config in nonempty_configs)} seconds')
+        print(f'Number of jobs: {len(nonempty_allocations)}')
+        longest_job_timeout = max(self.config_max_runtime(config) for config in nonempty_configs)
+        print(f'Longest job timeout: {longest_job_timeout / 60 / 60: .2f} hours ({longest_job_timeout} seconds)')
+        longest_job_expected = max(alloc.utilized_resources.avg_runtime for alloc in nonempty_allocations)
+        print(f'Longest job runtime (expected): {longest_job_expected / 60 / 60: .2f} hours ({longest_job_expected} seconds)')
+        avg_job_max = sum(alloc.utilized_resources.max_runtime for alloc in nonempty_allocations) / len(nonempty_allocations)
+        print(f'Average job runtime (max): {avg_job_max / 60 / 60: .2f} hours ({avg_job_max} seconds)')
+        avg_job_expected = sum(alloc.utilized_resources.avg_runtime for alloc in nonempty_allocations) / len(nonempty_allocations)
+        print(f'Average job runtime (expected): {avg_job_expected / 60 / 60: .2f} hours ({avg_job_expected} seconds)')
 
     @staticmethod
     def _srun_queue(dbpath: str, queue: DBQueue, finished_queues: multiprocessing.Queue):

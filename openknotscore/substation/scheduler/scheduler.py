@@ -274,9 +274,18 @@ def schedule_task(task: Task, queue: TaskQueue):
     queue.chain_utilized_resources.min_runtime += task.utilized_resources.min_runtime
     queue.chain_utilized_resources.avg_runtime += task.utilized_resources.avg_runtime
     queue.chain_utilized_resources.max_runtime += task.utilized_resources.max_runtime
-    queue.allocation.utilized_resources.min_runtime += task.utilized_resources.min_runtime
-    queue.allocation.utilized_resources.avg_runtime += task.utilized_resources.avg_runtime
-    queue.allocation.utilized_resources.max_runtime += task.utilized_resources.max_runtime
+    queue.allocation.utilized_resources.min_runtime = max(
+        queue.allocation.utilized_resources.min_runtime,
+        queue.chain_utilized_resources.min_runtime
+    )
+    queue.allocation.utilized_resources.avg_runtime = max(
+        queue.allocation.utilized_resources.avg_runtime,
+        queue.chain_utilized_resources.avg_runtime
+    )
+    queue.allocation.utilized_resources.max_runtime = max(
+        queue.allocation.utilized_resources.max_runtime,
+        queue.chain_utilized_resources.max_runtime
+    )
 
 def fill_allocation(
     allocation: ComputeAllocation,
