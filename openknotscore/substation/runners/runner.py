@@ -5,23 +5,6 @@ from ..taskdb import TaskDB
 from ..scheduler.domain import Task, Schedule
 from ..deferred import flush_deferred
 
-class DBComputeConfiguration(NamedTuple):
-    allocations: list[int]
-
-class DBAllocation(NamedTuple):
-    queues: list[int]
-
-class DBQueue(NamedTuple):
-    tasks: list[int]
-    cpus: int
-    gpu_id: int | None
-    child_queues: list[int]
-
-class DBTask(NamedTuple):
-    function: int
-    args: list[int]
-    kwargs: list[int]
-
 class Runner(ABC):
     @abstractmethod
     def run(self, tasks: list[Task], job_name: str, on_queue: Callable[[Iterable[Task]], None] | None = None):
@@ -41,7 +24,7 @@ class Runner(ABC):
 
     @staticmethod
     def run_serialized_queue(dbpath: str, id: int):
-        print('Running erialized queue', id)
+        print('Running serialized queue', id)
         with TaskDB(dbpath) as db:
             for task in db.tasks_for_queue(id):
                 task.run()

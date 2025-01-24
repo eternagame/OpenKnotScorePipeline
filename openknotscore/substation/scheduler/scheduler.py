@@ -55,8 +55,8 @@ def get_new_allocation(resource_request: UtilizedResources, schedule: Schedule):
         if (
             config.cpus >= resource_request.cpus
             and config.gpu_memory >= resource_request.gpu_memory
-            and config.memory > resource_request.memory
-            and config.runtime > resource_request.max_runtime
+            and config.memory >= resource_request.memory
+            and config.runtime >= resource_request.max_runtime
         ):
             alloc = ComputeAllocation(config)
             schedule.compute_allocations.append(alloc)

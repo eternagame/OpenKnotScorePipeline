@@ -27,9 +27,9 @@ def run_cli():
     subparsers.add_parser('score', help='compute scores using previously generated predictions and export to the final output files')
     subparsers.add_parser('predict-forecast', help='compute the total number of core-hours required for computation and minimum per-job requirements')
     model_parser = subparsers.add_parser('predict-generate-model', help='run predictors with sample inputs and generate resource usage models')
-    model_parser.add_argument('--cpus', dest='cpus', help='cpus to allocate per predictor, in MB (limits not supported for local runner)', default=1)
-    model_parser.add_argument('--max-memory', dest='max_memory', help='maximum memory to allocate per predictor, in MB (limits not supported for local runner)', default=1024*4)
-    model_parser.add_argument('--max-gpu-memory', dest='max_gpu_memory', help='maximum GPU memory to allocate per predictor if it supports GPU, in MB (limits not supported for local runner)', default=0)
+    model_parser.add_argument('--cpus', type=int, dest='cpus', help='cpus to allocate per predictor, in MB (limits not supported for local runner)', default=1)
+    model_parser.add_argument('--max-memory', type=int, dest='max_memory', help='maximum memory to allocate per predictor, in MB (limits not supported for local runner)', default=1000*8)
+    model_parser.add_argument('--max-gpu-memory', type=int, dest='max_gpu_memory', help='maximum GPU memory to allocate per predictor if it supports GPU, in MB (limits not supported for local runner)', default=0)
     import_parser = subparsers.add_parser('predict-import', help='import pre-computed structures from another file into the pipeline database')
     import_parser.add_argument(dest='file', help='path to the file to import structures from')
     import_parser.add_argument('--override', dest='override', help='override values in the database if they already exist', default=False)
@@ -48,8 +48,10 @@ def run_cli():
                     UtilizedResources(
                         math.ceil(MODEL_TIMEOUT * config.runtime_buffer), MODEL_TIMEOUT, MODEL_TIMEOUT,
                         args.cpus,
-                        args.max_memory * 1024 * 1024 * config.memory_buffer,
-                        args.max_gpu_memory * config.gpu_memory_buffer if predictor.gpu else 0
+                        # Note we don't use the runtime/memory buffer here, because the user is specifying
+                        # an actual cap they want, we're not adding overage for an estimate
+                        math.ceil(args.max_memory * 1024 * 1024),
+                        args.max_gpu_memory if predictor.gpu else 0
                     )
                 )
                 for predictor in config.enabled_predictors

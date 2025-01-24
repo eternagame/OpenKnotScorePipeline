@@ -11,6 +11,7 @@ from .scheduler.domain import Schedule, Runnable
 class DBQueue(NamedTuple):
     id: int
     cpus: int
+    memory: int
     gpu_id: int | None
 
 class TaskDB:
@@ -50,6 +51,7 @@ class TaskDB:
             configuration INTEGER NOT NULL,
             allocation INTEGER NOT NULL,
             cpus INTEGER NOT NULL,
+            memory INTEGER NOT NULL,
             gpu_id INTEGER,
             parent INTEGER
         );
@@ -136,11 +138,11 @@ class TaskDB:
         ).close()
         self._cx.executemany(
             '''
-            INSERT INTO queues VALUES(?, ?, ?, ?, ?, ?)
+            INSERT INTO queues VALUES(?, ?, ?, ?, ?, ?, ?)
             ''',
             itertools.chain.from_iterable(
                 (
-                    (queue.id, alloc.configuration.id, allocidx, queue.utilized_resources.cpus, queue.gpu_id, queue.parent_queue.id if queue.parent_queue else None)
+                    (queue.id, alloc.configuration.id, allocidx, queue.utilized_resources.cpus, queue.utilized_resources.memory, queue.gpu_id, queue.parent_queue.id if queue.parent_queue else None)
                     for queue in alloc.nonempty_queues()
                 )
                 for (allocidx, alloc) in enumerate(schedule.nonempty_compute_allocations())
@@ -184,12 +186,12 @@ class TaskDB:
     def queues_for_allocation(self, compute_config_id: int, allocation_id: int):
         with closing(self._cx.execute(
             '''
-            SELECT id, cpus, gpu_id FROM queues WHERE configuration=? and allocation=?
+            SELECT id, cpus, memory, gpu_id FROM queues WHERE configuration=? and allocation=?
             ''',
             (compute_config_id, allocation_id)
         )) as cur:
-            for (id, cpus, gpu_id) in cur:
-                yield DBQueue(id, cpus, gpu_id)
+            for (id, cpus, memory, gpu_id) in cur:
+                yield DBQueue(id, cpus, memory,  gpu_id)
 
     def children_for_queue(self, id: int):
         with closing(self._cx.execute(
@@ -198,5 +200,5 @@ class TaskDB:
             ''',
             (id,)
         )) as cur:
-            for (id, cpus, gpu_id) in cur:
-                yield DBQueue(id, cpus, gpu_id)
+            for (id, cpus, memory, gpu_id) in cur:
+                yield DBQueue(id, cpus, memory, gpu_id)

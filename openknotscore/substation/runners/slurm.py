@@ -11,7 +11,7 @@ import multiprocessing
 from subprocess import run
 from ..scheduler.domain import Schedule, ComputeConfiguration, Task
 from ..scheduler.scheduler import schedule_tasks
-from .runner import Runner, DBQueue
+from .runner import Runner
 from ..taskdb import TaskDB, DBQueue
 
 @dataclass
@@ -39,23 +39,27 @@ class SlurmRunner(Runner):
             memory * self.mem_cost / 1024 / 1024 / 1024
         ) * runtime)
 
-    def config_max_cpus(self, config: ComputeConfiguration):
+    def config_max_cpus(self, config: ComputeConfiguration, with_memory_overage=True):
         return max(
             max(
                 sum(
                     max(task.utilized_resources.cpus for task in queue.tasks) if len(queue.tasks) > 0 else 0 for queue in alloc.queues
                 ),
+                # When eg calculating cost, we want to consider the fact that we will actually be allocating extra CPUs if we use more
+                # memory per core than the max memory per core setting. However, when we actually go to request the resources,
+                # we don't want to *explicitly* ask for those extra cores, as the actual Slurm configuration (vs what the user passed to the runner)
+                # may not require it
                 math.ceil(
                     sum(
                         max(task.utilized_resources.memory for task in queue.tasks) if len(queue.tasks) > 0 else 0 for queue in alloc.queues
                     ) / self.max_mem_per_core
-                )
+                ) if with_memory_overage else 0
             )
             for alloc in config.allocations
         )
     
     def config_max_memory(self, config: ComputeConfiguration):
-        max(
+        return max(
             sum(
                 max(task.utilized_resources.memory for task in queue.tasks) if len(queue.tasks) > 0 else 0 for queue in alloc.queues
             ) for alloc in config.allocations
@@ -116,9 +120,9 @@ class SlurmRunner(Runner):
                 path.join(self.db_path, f'slurm-logs'),
                 timeout=f'{max_runtime // 60}:{max_runtime % 60}',
                 partition=self.partitions,
-                cpus=self.config_max_cpus(comp_config),
+                cpus=self.config_max_cpus(comp_config, with_memory_overage=False),
                 gpus=max_gpus if max_gpus > 0 else None,
-                memory_per_node=self.config_max_memory(comp_config),
+                memory_per_node=f'{math.ceil(self.config_max_memory(comp_config)/1024)}K',
                 constraint=self.constraints,
                 mail_type='END',
                 array=f'0-{array_size-1}' if array_size > 1 else None,
@@ -178,6 +182,7 @@ class SlurmRunner(Runner):
         srun(
             ['/usr/bin/env', 'python', '-c', f'from openknotscore.substation.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue.id})'],
             cpus=queue.cpus,
+            memory_per_node=f'{math.ceil(queue.memory/1024)}K',
             gpu_cmode='shared' if queue.gpu_id != None else None,
             cuda_visible_devices=queue.gpu_id,
             export='ALL'
@@ -204,6 +209,8 @@ class SlurmRunner(Runner):
 def srun(
     command: list[str],
     cpus: int = None,
+    memory_per_node: str = None,
+    memory_per_cpu: str = None,
     gpu_cmode: str = None,
     cuda_visible_devices: str = None,
     export: str = None
@@ -218,6 +225,12 @@ def srun(
 
     if cpus is not None:
         args.append(f'--cpus-per-task={cpus}')
+
+    if memory_per_node is not None:
+        args.append(f'--mem={memory_per_node}')
+    
+    if memory_per_cpu is not None:
+        args.append(f'--mem-per-cpu={memory_per_cpu}')
     
     if gpu_cmode is not None:
         args.append(f'--gpu_cmode={gpu_cmode}')
