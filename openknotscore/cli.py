@@ -118,9 +118,9 @@ def run_cli():
                                 for name in predictor.prediction_names
                             ): continue
                             resources = predictor.approximate_resources(sequence)
-                            resources.max_runtime *= config.runtime_buffer
-                            resources.memory *= config.memory_buffer
-                            resources.gpu_memory *= config.gpu_memory_buffer
+                            resources.max_runtime = math.ceil(resources.max_runtime * config.runtime_buffer)
+                            resources.memory = math.ceil(resources.memory * config.memory_buffer)
+                            resources.gpu_memory = math.ceil(resources.gpu_memory * config.gpu_memory_buffer)
                             pred_tasks.append(
                                 Task(
                                     Runnable.create(predict)(predictor, sequence, reactivity, pred_db_path),
