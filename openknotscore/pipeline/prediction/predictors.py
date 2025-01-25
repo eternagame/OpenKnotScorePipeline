@@ -73,7 +73,7 @@ class ArnieMfeShapePredictor(ArnieMfePredictor):
     def run(self, seq: str, reactivities: list[float]):
         # arnie expects a list of float values; we need to account for the leader region with invalid data,
         # so we don't provide the reactivity data directly stored in the row
-        processed_reactivities = [value if value is not None else 0 for value in reactivities]
+        processed_reactivities = [value if value is not None else -1 for value in reactivities]
         return {
             self.name: mfe(seq, self.package_name, shape_signal=processed_reactivities, **self.arnie_kwargs)
         }
