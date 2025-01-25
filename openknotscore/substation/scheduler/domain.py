@@ -136,6 +136,11 @@ class ComputeAllocation:
         return list(
             queue for queue in self.queues if len(queue.tasks) > 0
         )
+    
+    def nonempty(self):
+        return any(
+            True for queue in self.queues if len(queue.tasks) > 0
+        )
 
     def leaf_queues(self) -> list['TaskQueue']:
         leaves: list['TaskQueue'] = []
@@ -175,9 +180,8 @@ class ComputeConfiguration:
 
     def nonempty_allocations(self):
         return list(
-            alloc for alloc in self.allocations if any(
-                True for queue in alloc.queues if len(queue.tasks) > 0
-            )
+            alloc for alloc in self.allocations
+            if alloc.nonempty()
         )
 
     id: int = field(default_factory=IdGenerator().generate)
@@ -187,6 +191,11 @@ class ComputeConfiguration:
 
     def __repr__(self):
         return f'ComputeConfiguration/{self.id}(cpus: {self.cpus}, memory: {self.memory}, gpus: {self.gpus}, runtime: {self.runtime})'
+
+    def nonempty(self):
+        return any(True for alloc in self.allocations if any(
+            True for queue in alloc.queues if len(queue.tasks) > 0
+        ))
 
 @dataclass
 class Schedule:
@@ -198,14 +207,11 @@ class Schedule:
     def nonempty_compute_configurations(self):
         return list(
             config for config in self.compute_configurations
-            if any(True for alloc in config.allocations if any(
-                True for queue in alloc.queues if len(queue.tasks) > 0
-            ))
+            if config.nonempty()
         )
     
     def nonempty_compute_allocations(self):
         return list(
-            alloc for alloc in self.compute_allocations if any(
-                True for queue in alloc.queues if len(queue.tasks) > 0
-            )
+            alloc for alloc in self.compute_allocations
+            if alloc.nonempty()
         )
