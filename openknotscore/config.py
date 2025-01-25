@@ -162,7 +162,13 @@ class OKSPConfig(ABC):
             .add_heuristic('hungarian', as_name='eternafold.HN'),
         predictors.Contrafold2PkFromBppPredictor()
             .add_heuristic('threshknot', as_name='contrafold_2.TK')
-            .add_heuristic('hungarian', as_name='contrafold_2.HN')
+            .add_heuristic('hungarian', as_name='contrafold_2.HN'),
+        predictors.RibonanzaNetSSPredictor('ribonanzanet-ss'),
+        predictors.RibonanzaNetShapeDerivedPredictor()
+            .add_configuration('2a3', 'rnastructure', as_name='rnet-2a3-rnastructure')
+            .add_configuration('dms', 'rnastructure', as_name='rnet-dms-rnastructure')
+            .add_configuration('2a3', 'shapeknots', as_name='rnet-2a3-shapeknots')
+            .add_configuration('dms', 'shapeknots', as_name='rnet-dms-shapeknots')
     ]
 
     runner: Runner = LocalRunner()

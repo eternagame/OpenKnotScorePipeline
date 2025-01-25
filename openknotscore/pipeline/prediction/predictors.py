@@ -430,3 +430,92 @@ class ShapifyHfoldPredictor(Predictor):
     @property
     def prediction_names(self):
         return [self.name]
+
+class RibonanzaNetSSPredictor(Predictor):
+    uses_experimental_reactivities=False
+    gpu=True
+
+    def __init__(self, as_name: str, env_location: str = None):
+        self.name = as_name
+        self.env_location = env_location
+
+    def run(self, seq: str, reactivities: list[float]):
+        env_location = self.env_location or os.environ['RIBONANZANET_ENV_PATH']
+        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../lib/inference-2d.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+
+        match = re.search(r"structure:(.*)\n", rnet_return.stdout)
+        if match:
+            structure = match.group(1)
+        else:
+            raise Exception(f'Could not get result from rnet output (stdout: {rnet_return.stdout}, stderr: {rnet_return.stderr})')
+        
+        return {
+            self.name: structure
+        }
+
+    def approximate_resources(self, seq: str) -> UtilizedResources:
+        x = len(seq)
+        return UtilizedResources(
+            9.93630267074983 + 0.009064971919693571*x,
+            5.328553048504195 + 0.0034631731109770417*x,
+            4.204866530717558 + 0.0022178808249596503*x,
+            1,
+            1332768293.9422886*x**0 + 142549.5294871579*x**1,
+            1521260659.6040597 + 66443.01382998787*x + 8378.075744909687*x**2
+        )
+
+    @property
+    def prediction_names(self):
+        return [self.name]
+
+class RibonanzaNetShapeDerivedPredictor(Predictor):
+    uses_experimental_reactivities=False
+    gpu=True
+
+    def __init__(self, env_location: str = None):
+        self.env_location = env_location
+        self.configurations = []
+
+    def add_configuration(self, reactivity_type: str, derivation_package: str, as_name: str):
+        self.configurations.append({
+            'reactivity_type': reactivity_type,
+            'derivation_package': derivation_package,
+            'name': as_name
+        })
+        return self
+
+    def run(self, seq: str, reactivities: list[float]):
+        env_location = self.env_location or os.environ['RIBONANZANET_ENV_PATH']
+        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../lib/inference-shape.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+
+        match = re.search(r"2a3:(.*)\ndms:(.*)\n", rnet_return.stdout)
+        if match:
+            reactivity_2a3 = [float(x) for x in match.group(1).split(',')]
+            reactivity_dms = [float(x) for x in match.group(2).split(',')]
+        else:
+            raise Exception(f'Could not get result from rnet output (stdout: {rnet_return.stdout}, stderr: {rnet_return.stderr})')
+        
+        return {
+            conf['name']: mfe(
+                seq,
+                'rnastructure',
+                shape_signal=reactivity_2a3 if conf['reactivity_type'] == '2a3' else reactivity_dms,
+                pseudo=conf['derivation_package'] == 'shapeknots'
+            )
+            for conf in self.configurations
+        }
+
+    def approximate_resources(self, seq: str) -> UtilizedResources:
+        x = len(seq)
+        return UtilizedResources(
+            0.0017890144980402386*x**2,
+            0.0010536675291728619*x**2,
+            2.686718054064782 + 0.007261345887062982*x + 3.156924098456259e-05*x**2,
+            1,
+            1064575385.5,
+            1517377492.8717134 + 8709.613988478806*x**2
+        )
+
+    @property
+    def prediction_names(self):
+        return [conf['name'] for conf in self.configurations]
