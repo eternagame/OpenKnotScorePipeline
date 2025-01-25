@@ -9,6 +9,7 @@ from pathlib import Path
 import sqlite3
 import pickle
 from xxhash import xxh3_64_digest
+from arnie.utils import convert_dotbracket_to_bp_list, convert_bp_list_to_dotbracket
 from ...substation.deferred import Deferred, register_deferred
 from ...substation.scheduler.domain import Task
 from .predictors import Predictor
@@ -322,16 +323,31 @@ def predict(predictor: Predictor, seq: str, reactivities: list[float], db_path: 
     try:
         predictions = predictor.run(seq, reactivities)
         for (name, pred) in predictions.items():
-            failed = all(char == 'x' for char in pred)
-            if failed:
+            result = pred
+            failed = False
+
+            if all(char == 'x' for char in pred):
+                failed = True
                 print(f'FAILED: predictor={name}, seq={seq}, reactivities={reactivities}')
                 print('Arnie returned all "x"')
+                result = 'Arnie returned all "x"'
+            else:
+                try:
+                    convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(pred, allow_pseudoknots=True), len(pred))
+                except Exception:
+                    failed = True
+                    err = traceback.format_exc()
+                    print(f'FAILED: predictor={name}, seq={seq}, reactivities={reactivities}')
+                    print('Invalid dot bracket')
+                    print(err)
+                    result = 'Invalid dot bracket\n' + err
+
             results.append(Result(
                 name,
                 seq,
                 reactivities,
                 not failed,
-                pred if not failed else 'Arnie returned all "x"'
+                result
             ))
     except Exception:
         err = traceback.format_exc()
