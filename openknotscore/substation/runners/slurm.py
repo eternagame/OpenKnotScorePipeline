@@ -15,31 +15,35 @@ from .runner import Runner
 from ..taskdb import TaskDB, DBQueue
 
 @dataclass
-class SlurmRunner(Runner):
-    db_path: str
+class SlurmConfig:
     partitions: str
     max_cores: int
     max_mem_per_core: int
-    max_jobs: int
     max_timeout: int
-    cpu_cost: int | float
-    gpu_cost: int | float
-    mem_cost: int | float
-    '''Per GiB'''
     max_gpus: int = 0
     gpu_memory: int = 0
     constraints: str = None
     init_script: str = None
 
-    def _cost(self, cpus: int, gpus: int, memory: int, runtime: int):
-        actual_cores = max(cpus, math.ceil(memory / self.max_mem_per_core))
+@dataclass
+class SlurmRunner(Runner):
+    db_path: str
+    max_jobs: int
+    cpu_cost: int | float
+    gpu_cost: int | float
+    mem_cost: int | float
+    '''Per GiB'''
+    configs: list[SlurmConfig]
+
+    def _cost(self, cpus: int, gpus: int, memory: int, runtime: int, max_mem_per_core: int):
+        actual_cores = max(cpus, math.ceil(memory / max_mem_per_core))
         return Decimal((
             actual_cores * self.cpu_cost +
             gpus * self.gpu_cost +
             memory * self.mem_cost / 1024 / 1024 / 1024
         ) * runtime)
 
-    def config_max_cpus(self, config: ComputeConfiguration, with_memory_overage=True):
+    def config_max_cpus(self, config: ComputeConfiguration, max_mem_per_core: int, with_memory_overage=True):
         return max(
             max(
                 sum(
@@ -52,7 +56,7 @@ class SlurmRunner(Runner):
                 math.ceil(
                     sum(
                         max(task.utilized_resources.memory for task in queue.tasks) if len(queue.tasks) > 0 else 0 for queue in alloc.queues
-                    ) / self.max_mem_per_core
+                    ) / max_mem_per_core
                 ) if with_memory_overage else 0
             )
             for alloc in config.allocations
@@ -85,12 +89,13 @@ class SlurmRunner(Runner):
             tasks,
             [
                 ComputeConfiguration(
-                    self.max_cores,
-                    self.max_cores * self.max_mem_per_core,
-                    self.max_gpus,
-                    self.max_timeout,
-                    self.gpu_memory,
+                    config.max_cores,
+                    config.max_cores * config.max_mem_per_core,
+                    config.max_gpus,
+                    config.max_timeout,
+                    config.gpu_memory,
                 )
+                for config in self.configs
             ]
         )
         
@@ -111,7 +116,8 @@ class SlurmRunner(Runner):
             cmds = [
                 f'python -c "from openknotscore.substation.runners.slurm import SlurmRunner; SlurmRunner.run_serialized_allocation(\'{dbpath}\', {comp_config.id}, {'$SLURM_ARRAY_TASK_ID' if array_size > 1 else 0})"'
             ]
-            if self.init_script: cmds.insert(0, self.init_script)
+            init_script = self.configs[schedule.compute_configurations.index(comp_config)].init_script
+            if init_script: cmds.insert(0, init_script)
 
             max_runtime = self.config_max_runtime(comp_config)
             sbatch(
@@ -119,11 +125,11 @@ class SlurmRunner(Runner):
                 f'{job_name}-{idx}' if len(schedule.compute_configurations) > 1 else job_name,
                 path.join(self.db_path, f'slurm-logs'),
                 timeout=f'{max_runtime // 60}:{max_runtime % 60}',
-                partition=self.partitions,
-                cpus=self.config_max_cpus(comp_config, with_memory_overage=False),
+                partition=self.configs[schedule.compute_configurations.index(comp_config)].partitions,
+                cpus=self.config_max_cpus(comp_config, self.configs[schedule.compute_configurations.index(comp_config)].max_mem_per_core, with_memory_overage=False),
                 gpus=max_gpus if max_gpus > 0 else None,
                 memory_per_node=f'{math.ceil(self.config_max_memory(comp_config)/1024)}K',
-                constraint=self.constraints,
+                constraint=self.configs[schedule.compute_configurations.index(comp_config)].constraints,
                 mail_type='END',
                 array=f'0-{array_size-1}' if array_size > 1 else None,
                 echo_cmd=True
@@ -138,13 +144,14 @@ class SlurmRunner(Runner):
             tasks,
             [
                 ComputeConfiguration(
-                    self.max_cores,
-                    self.max_cores * self.max_mem_per_core,
-                    self.max_gpus,
-                    self.max_timeout,
-                    self.gpu_memory,
+                    config.max_cores,
+                    config.max_cores * config.max_mem_per_core,
+                    config.max_gpus,
+                    config.max_timeout,
+                    config.gpu_memory,
                 )
-            ],
+                for config in self.configs
+            ]
         )
 
         max_runtime = 0
@@ -166,7 +173,7 @@ class SlurmRunner(Runner):
         nonempty_allocations = schedule.nonempty_compute_allocations()
 
         print(f'Slurm TRES cost: {sum(
-            self._cost(config.cpus, config.gpus, config.memory, config.runtime) * len(config.nonempty_allocations())
+            self._cost(config.cpus, config.gpus, config.memory, config.runtime, self.configs[schedule.compute_configurations.index(config)].max_mem_per_core) * len(config.nonempty_allocations())
             for config in nonempty_configs
         )}')
         print(f'Longest task runtime (max): {max_runtime / 60 / 60: .2f} hours ({max_runtime} seconds)')
@@ -174,7 +181,7 @@ class SlurmRunner(Runner):
         print(f'Active core-hours (max): {max_core_seconds / 60 / 60: .2f}')
         print(f'Active core-hours (expected): {expected_core_seconds / 60 / 60: .2f}')
         print(f'Allocated core-hours: {sum([
-            self.config_max_cpus(config) * self.config_max_runtime(config) * len(config.nonempty_allocations())
+            self.config_max_cpus(config, self.configs[schedule.compute_configurations.index(config)].max_mem_per_core) * self.config_max_runtime(config) * len(config.nonempty_allocations())
             for config in nonempty_configs
         ]) / 60 / 60: .2f}')
         if max_gpu_seconds > 0:
