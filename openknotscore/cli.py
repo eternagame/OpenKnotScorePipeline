@@ -36,6 +36,8 @@ def run_cli():
     check_failed_parser = subparsers.add_parser('predict-check-failed', help='show information about missing or failed predictions')
     check_failed_parser.add_argument('--show-errors', action='store_true', dest='show_errors', help='if errors were encountered, print what they were', default=False)
     check_failed_parser.add_argument('--nrows', type=int, dest='nrows', help='for missing/failed predictions, print the first n rows of source data which failed per unique failure', default=0)
+    clear_parser = subparsers.add_parser('predict-clear', help='clear predictions for a given predictor')
+    clear_parser.add_argument('predictor')
 
     args = parser.parse_args()
 
@@ -89,6 +91,10 @@ def run_cli():
             )
         
         print(f'{datetime.now()} Completed')
+    elif args.cmd == 'predict-clear':
+        print('Clearing...')
+        with PredictionDB(pred_db_path, 'w') as preddb:
+            preddb.clear_predictor(args.predictor)
     else:
         print(f'{datetime.now()} Loading data...')
         data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))

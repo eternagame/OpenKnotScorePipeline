@@ -294,6 +294,9 @@ class PredictionDB:
         )) as cur:
             return {predictor: True for (predictor,) in cur.fetchall()}
 
+    def clear_predictor(self, predictor: str):
+        self._cx.execute('DELETE FROM predictions WHERE predictor=(SELECT id FROM predictors WHERE name=?)', (predictor,)).close()
+
 @dataclass
 class Result:
     predictor: str
