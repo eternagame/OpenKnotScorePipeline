@@ -208,7 +208,7 @@ class SlurmRunner(Runner):
             cpus=queue.cpus,
             memory_per_node=f'{math.ceil(queue.memory/1024)}K',
             gpu_cmode='shared' if queue.gpu_id != None else None,
-            cuda_visible_devices=queue.gpu_id,
+            cuda_visible_devices=str(queue.gpu_id),
             export='ALL'
         )
         finished_queues.put(queue)

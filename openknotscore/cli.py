@@ -57,8 +57,8 @@ def run_cli():
                         args.cpus,
                         # Note we don't use the runtime/memory buffer here, because the user is specifying
                         # an actual cap they want, we're not adding overage for an estimate
-                        math.ceil(args.max_memory * 1024 * 1024),
-                        args.max_gpu_memory if predictor.gpu else 0
+                        args.max_memory * 1024 * 1024,
+                        args.max_gpu_memory * 1024 * 1024 if predictor.gpu else 0
                     )
                 )
                 for predictor in config.enabled_predictors
