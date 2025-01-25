@@ -13,11 +13,13 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import Lasso
 from sklearn.pipeline import Pipeline
 from .predictors import Predictor
+from pynvml_utils import nvidia_smi
 
 @dataclass
 class ResourceSample:
     time: float
     maxrss: int
+    maxgpu: int
     result: Any
 
 @dataclass
@@ -27,22 +29,35 @@ class AggregateResourceSample:
     average_runtime: float
     max_runtime: float
     max_memory: float
+    max_gpu: float
 
 def sample_memory(stop: threading.Event, out: multiprocessing.Queue):
     max_mem = 0
     current_process = psutil.Process()
-    while not stop.wait(0.05):        
+    while not stop.wait(0.05):     
         mem = current_process.memory_info().rss
         for child in current_process.children(recursive=True):
             mem += child.memory_info().rss
         max_mem = max(mem, max_mem)
     out.put(max_mem)
 
-def run_sample(f, out: multiprocessing.Queue):
+def sample_gpu(stop: threading.Event, out: multiprocessing.Queue):
+    max_mem = 0
+    nvsmi = nvidia_smi.getInstance()
+    while not stop.wait(0.05):
+        mem = nvsmi.DeviceQuery('memory.used')['gpu'][0]['fb_memory_usage']['used'] * 1024 * 1024
+        max_mem = max(mem, max_mem)
+    out.put(max_mem)
+
+def run_sample(f, out: multiprocessing.Queue, gpu: bool):
     done = threading.Event()
     mem_sampler_out = multiprocessing.Queue()
     mem_sampler = threading.Thread(target=sample_memory, args=(done,mem_sampler_out))
     mem_sampler.start()
+    if gpu:
+        gpu_sampler_out = multiprocessing.Queue()
+        gpu_sampler = threading.Thread(target=sample_gpu, args=(done,gpu_sampler_out))
+        gpu_sampler.start()
 
     start = time.perf_counter()
     try:
@@ -55,18 +70,24 @@ def run_sample(f, out: multiprocessing.Queue):
     done.set()
     mem_sampler.join()
     max_mem = mem_sampler_out.get()
+    if gpu:
+        gpu_sampler.join()
+        max_gpu = gpu_sampler_out.get()
+    else:
+        max_gpu = 0
 
     out.put(
         ResourceSample(
             end - start,
             max_mem,
+            max_gpu,
             res
         )
     )
 
-def sample_in_process(f, timeout) -> ResourceSample:
+def sample_in_process(f, timeout, gpu) -> ResourceSample:
     sampler_out = multiprocessing.Queue()
-    p = multiprocessing.Process(target=run_sample, args=(f, sampler_out), daemon=True)
+    p = multiprocessing.Process(target=run_sample, args=(f, sampler_out, gpu), daemon=True)
     p.start()
     p.join(timeout)
     if p.is_alive():
@@ -124,7 +145,7 @@ def sample_resources_at_length(predictor: Predictor, seqlen: int):
     test_cases *= 3
 
 
-    samples = [sample_in_process(lambda: predictor.run(seq, reactive), MAX_TIMEOUT) for (seq, reactive) in test_cases]
+    samples = [sample_in_process(lambda: predictor.run(seq, reactive), MAX_TIMEOUT, predictor.gpu) for (seq, reactive) in test_cases]
 
     samples = [
         sample for sample in samples
@@ -143,7 +164,8 @@ def sample_resources_at_length(predictor: Predictor, seqlen: int):
         min(sample.time for sample in samples),
         sum(sample.time for sample in samples) / len(samples),
         max(sample.time for sample in samples),
-        max(sample.maxrss for sample in samples)
+        max(sample.maxrss for sample in samples),
+        max(sample.maxgpu for sample in samples),
     )
 
 def fit_model(samples: list[AggregateResourceSample], key: Callable[[AggregateResourceSample], int | float]):
@@ -247,6 +269,7 @@ def model_resource_usage(predictor: Predictor):
         'avg_runtime': fit_model(samples, lambda sample: sample.average_runtime),
         'min_runtime': fit_model(samples, lambda sample: sample.min_runtime),
         'max_memory': fit_model(samples, lambda sample: sample.max_memory),
+        'max_gpu': fit_model(samples, lambda sample: sample.max_gpu),
     }
 
 MODEL_TIMEOUT = (
