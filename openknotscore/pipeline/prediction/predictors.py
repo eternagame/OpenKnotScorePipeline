@@ -103,7 +103,7 @@ class ArniePkFromBppPredictor(Predictor):
         self.arnie_bpp_kwargs = arnie_bpp_kwargs or {}
         self.heuristics = []
 
-    def add_heuristic(self, heuristic, as_name: str, arnie_heuristic_kwargs: dict = None):
+    def add_heuristic(self, heuristic: str, as_name: str, arnie_heuristic_kwargs: dict = None):
         self.prediction_names.append(as_name)
         self.heuristics.append({
             'heuristic': heuristic,
@@ -395,7 +395,6 @@ class Contrafold2PkFromBppPredictor(ArniePkFromBppPredictor):
 # TODO: Move into Arnie
 class ShapifyHfoldPredictor(Predictor):
     uses_experimental_reactivities = False
-    name = ''
 
     def __init__(self, as_name: str, hfold_location: str = None):
         self.name = as_name
@@ -407,7 +406,10 @@ class ShapifyHfoldPredictor(Predictor):
 
         # Pull structure out of Shapify output
         match = re.search(r"Result_0: (.*) \n", hfold_return.stdout)
-        structure = match.group(1) if match else "ERR"
+        if match:
+            structure = match.group(1)
+        else:
+            raise Exception(f'Could not get result from hfold output (stdout: {hfold_return.stdout}, stderr: {hfold_return.stderr})')
         
         # Sanitize dbn structure to match our conventions 
         return {
