@@ -34,7 +34,7 @@ def run_cli():
     model_parser.add_argument('--max-gpu-memory', type=int, dest='max_gpu_memory', help='maximum GPU memory to allocate per predictor if it supports GPU, in MB (limits not supported for local runner)', default=0)
     import_parser = subparsers.add_parser('predict-import', help='import pre-computed structures from another file into the pipeline database')
     import_parser.add_argument(dest='file', help='path to the file to import structures from')
-    import_parser.add_argument('--override', dest='override', help='override values in the database if they already exist', default=False)
+    import_parser.add_argument('--override', action='store_true', dest='override', help='override values in the database if they already exist')
     check_failed_parser = subparsers.add_parser('predict-check-failed', help='show information about missing or failed predictions')
     check_failed_parser.add_argument('--show-errors', action='store_true', dest='show_errors', help='if errors were encountered, print what they were', default=False)
     check_failed_parser.add_argument('--nrows', type=int, dest='nrows', help='for missing/failed predictions, print the first n rows of source data which failed per unique failure', default=0)
@@ -67,10 +67,12 @@ def run_cli():
         )
     elif args.cmd == 'predict-import':
         print(f'{datetime.now()} Loading data...')
+        def parse_list(val: str):
+            return [None if x.strip() in ('None', 'nan', 'NaN') else float(x) for x in val.removeprefix('[').removesuffix(']').split(',')]
         if args.file.endswith('.csv'):
-            data = pd.read_csv(args.file)
+            data = pd.read_csv(args.file, converters={'reactivity': parse_list})
         elif args.file.endswith('.tsv'):
-            data = pd.read_csv(args.file, sep='\t')
+            data = pd.read_csv(args.file, sep='\t', converters={'reactivity': parse_list})
         elif args.file.endswith('.pkl'):
             data = pd.read_pickle(args.file)
         else:
@@ -84,13 +86,28 @@ def run_cli():
         with PredictionDB(pred_db_path, 'c') as preddb:
             preddb.upsert_success(
                 (
-                    (sequence, structure, None)
-                    for col in set(predictor_names).intersection(available_columns)
-                    for (sequence, structure) in data[['sequence', col]].itertuples(False)
+                    (predictor, sequence, None, structure)
+                    for predictor in set(predictor_names).intersection(available_columns)
+                    for (sequence, structure) in data[['sequence', predictor]].itertuples(False)
                     if not (pd.isna(structure) or all([char == "x" for char in structure]))
                 ),
                 args.override
             )
+        if 'reactivity' in data.columns:
+            reactive_predictor_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in config.enabled_predictors if predictor.uses_experimental_reactivities
+            ))
+            reactive_available_columns = list(colname for colname in data.columns if colname in reactive_predictor_names)
+            with PredictionDB(pred_db_path, 'c') as preddb:
+                preddb.upsert_success(
+                    (
+                        (predictor, sequence, reactivity, structure)
+                        for predictor in set(reactive_predictor_names).intersection(reactive_available_columns)
+                        for (sequence, reactivity, structure) in data[['sequence', 'reactivity', predictor]].itertuples(False)
+                        if not (pd.isna(structure) or all([char == "x" for char in structure]))
+                    ),
+                    args.override
+                )
         
         print(f'{datetime.now()} Completed')
     elif args.cmd == 'predict-clear':
