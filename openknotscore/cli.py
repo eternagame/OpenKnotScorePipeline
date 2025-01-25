@@ -23,9 +23,11 @@ def run_cli():
     parser.add_argument(dest='module', help='python module path containing Config class')
 
     subparsers = parser.add_subparsers(dest='cmd', help='subcommand', required=True)
-    subparsers.add_parser('predict', help='generate missing structure predictions')
+    predict_parser = subparsers.add_parser('predict', help='generate missing structure predictions')
+    predict_parser.add_argument('--skip-failed', action='store_true', dest='skip_failed', help='Dont rerun failed predictions')
     subparsers.add_parser('score', help='compute scores using previously generated predictions and export to the final output files')
-    subparsers.add_parser('predict-forecast', help='compute the total number of core-hours required for computation and minimum per-job requirements')
+    forecast_parser = subparsers.add_parser('predict-forecast', help='compute the total number of core-hours required for computation and minimum per-job requirements')
+    forecast_parser.add_argument('--skip-failed', action='store_true', dest='skip_failed', help='Dont rerun failed predictions')
     model_parser = subparsers.add_parser('predict-generate-model', help='run predictors with sample inputs and generate resource usage models')
     model_parser.add_argument('--cpus', type=int, dest='cpus', help='cpus to allocate per predictor, in MB (limits not supported for local runner)', default=1)
     model_parser.add_argument('--max-memory', type=int, dest='max_memory', help='maximum memory to allocate per predictor, in MB (limits not supported for local runner)', default=1000*8)
@@ -107,7 +109,9 @@ def run_cli():
                     if not predictor.uses_experimental_reactivities:
                         for sequence in data['sequence'].unique():
                             if all(
-                                preddb.curr_status(name, sequence, None) == PredictionStatus.SUCCESS
+                                preddb.curr_status(name, sequence, None) in (
+                                    [PredictionStatus.SUCCESS, PredictionStatus.FAILED] if args.skip_failed else [PredictionStatus.SUCCESS]
+                                )
                                 for name in predictor.prediction_names
                             ): continue
                             resources = predictor.approximate_resources(sequence)
