@@ -84,12 +84,12 @@ def run_cli():
         ))
         available_columns = list(
             colname for colname in data.columns
-            if config.imported_column_map.get(colname, colname) in predictor_names
+            if config.imported_column_map.get(colname, colname.removesuffix('_PRED')) in predictor_names
         )
         with PredictionDB(pred_db_path, 'c') as preddb:
             preddb.upsert_success(
                 (
-                    (config.imported_column_map.get(colname, colname), sequence, None, structure)
+                    (config.imported_column_map.get(colname, colname.removesuffix('_PRED')), sequence, None, structure)
                     for colname in available_columns
                     for (sequence, structure) in data[['sequence', colname]].itertuples(False)
                     if not (pd.isna(structure) or all([char == "x" for char in structure]))
@@ -102,12 +102,12 @@ def run_cli():
             ))
             reactive_available_columns = list(
                 colname for colname in data.columns
-                if config.imported_column_map.get(colname, colname) in reactive_predictor_names
+                if config.imported_column_map.get(colname, colname.removesuffix('_PRED')) in reactive_predictor_names
             )
             with PredictionDB(pred_db_path, 'c') as preddb:
                 preddb.upsert_success(
                     (
-                        (config.imported_column_map.get(colname, colname), sequence, reactivity, structure)
+                        (config.imported_column_map.get(colname, colname.removesuffix('_PRED')), sequence, reactivity, structure)
                         for colname in reactive_available_columns
                         for (sequence, reactivity, structure) in data[['sequence', 'reactivity', colname]].itertuples(False)
                         if not (pd.isna(structure) or all([char == "x" for char in structure]))
@@ -277,6 +277,8 @@ def run_cli():
             tqdm.pandas(desc="Calculating OpenKnotScore")
             oks = data.progress_apply(getOKSperRow,axis=1)
             data = pd.merge(data,oks,how="left",left_index=True,right_index=True)
+
+            data = data.rename(columns={c: c+'_PRED' for c in prediction_names})
 
             for output in config.output_configs:
                 output.write(data, config)
