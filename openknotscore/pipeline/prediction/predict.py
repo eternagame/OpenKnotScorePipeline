@@ -80,7 +80,8 @@ class PredictionDB:
                 status INTEGER NOT NULL,
                 result INTEGER
             );
-            CREATE UNIQUE INDEX IF NOT EXISTS prediction_args ON predictions(predictor, sequence, reactivities); 
+            CREATE UNIQUE INDEX IF NOT EXISTS prediction_args ON predictions(predictor, sequence, reactivities);
+            CREATE UNIQUE INDEX IF NOT EXISTS prediction_result ON predictions(sequence, reactivities, predictor, status);
             '''
         )
         self._cx.execute("INSERT INTO meta VALUES('version', '1') ON CONFLICT DO UPDATE SET value='1'")
