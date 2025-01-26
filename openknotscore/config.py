@@ -135,6 +135,8 @@ class OKSPConfig(ABC):
     @abstractmethod
     def output_configs() -> list[OutputConfig]:
         pass
+
+    imported_column_map: dict[str, str] = {}
     
     enabled_predictors: list[predictors.Predictor] = [
         predictors.Vienna2Predictor(as_name='vienna2'),

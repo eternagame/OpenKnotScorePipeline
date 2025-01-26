@@ -82,13 +82,16 @@ def run_cli():
         predictor_names = list(itertools.chain.from_iterable(
             predictor.prediction_names for predictor in config.enabled_predictors if not predictor.uses_experimental_reactivities
         ))
-        available_columns = list(colname for colname in data.columns if colname in predictor_names)
+        available_columns = list(
+            colname for colname in data.columns
+            if config.imported_column_map.get(colname, colname) in predictor_names
+        )
         with PredictionDB(pred_db_path, 'c') as preddb:
             preddb.upsert_success(
                 (
-                    (predictor, sequence, None, structure)
-                    for predictor in set(predictor_names).intersection(available_columns)
-                    for (sequence, structure) in data[['sequence', predictor]].itertuples(False)
+                    (config.imported_column_map.get(colname, colname), sequence, None, structure)
+                    for colname in available_columns
+                    for (sequence, structure) in data[['sequence', colname]].itertuples(False)
                     if not (pd.isna(structure) or all([char == "x" for char in structure]))
                 ),
                 args.override
@@ -97,13 +100,16 @@ def run_cli():
             reactive_predictor_names = list(itertools.chain.from_iterable(
                 predictor.prediction_names for predictor in config.enabled_predictors if predictor.uses_experimental_reactivities
             ))
-            reactive_available_columns = list(colname for colname in data.columns if colname in reactive_predictor_names)
+            reactive_available_columns = list(
+                colname for colname in data.columns
+                if config.imported_column_map.get(colname, colname) in reactive_predictor_names
+            )
             with PredictionDB(pred_db_path, 'c') as preddb:
                 preddb.upsert_success(
                     (
-                        (predictor, sequence, reactivity, structure)
-                        for predictor in set(reactive_predictor_names).intersection(reactive_available_columns)
-                        for (sequence, reactivity, structure) in data[['sequence', 'reactivity', predictor]].itertuples(False)
+                        (config.imported_column_map.get(colname, colname), sequence, reactivity, structure)
+                        for colname in reactive_available_columns
+                        for (sequence, reactivity, structure) in data[['sequence', 'reactivity', colname]].itertuples(False)
                         if not (pd.isna(structure) or all([char == "x" for char in structure]))
                     ),
                     args.override
