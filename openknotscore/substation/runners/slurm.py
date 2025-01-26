@@ -122,7 +122,7 @@ class SlurmRunner(Runner):
             max_runtime = self.config_max_runtime(comp_config)
             sbatch(
                 cmds,
-                f'{job_name}-{idx}' if len(schedule.compute_configurations) > 1 else job_name,
+                f'{job_name}-{idx+1}' if len(schedule.nonempty_compute_configurations()) > 1 else job_name,
                 path.join(self.db_path, f'slurm-logs'),
                 timeout=f'{max_runtime // 60}:{max_runtime % 60}',
                 partition=self.configs[schedule.compute_configurations.index(comp_config)].partitions,
