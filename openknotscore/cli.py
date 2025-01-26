@@ -187,14 +187,15 @@ def run_cli():
                 if predictor.uses_experimental_reactivities
             ))
             prediction_names = [*nonreactive_prediction_names, *reactive_prediction_names]
-            tqdm.pandas(desc='Retrieving predictions')
             with PredictionDB(pred_db_path, 'c') as preddb:
+                tqdm.pandas(desc='Retrieving errors')
                 errors = data.progress_apply(
                     lambda row: preddb.get_failed(row['sequence'], row.get('reactivity'), nonreactive_prediction_names, reactive_prediction_names),
                     axis=1,
                     result_type='expand'
                 )
                 data = pd.merge(data,errors,how="left",left_index=True,right_index=True)
+                tqdm.pandas(desc='Retrieving predictions')
                 exists = data.progress_apply(
                     lambda row: preddb.get_prediction_success(row['sequence'], row.get('reactivity'), nonreactive_prediction_names, reactive_prediction_names),
                     axis=1,
