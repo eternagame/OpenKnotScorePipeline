@@ -104,8 +104,8 @@ def sample_in_process(f, timeout, gpu) -> ResourceSample:
 # running longer than MAX_TIMEOUT. This way we can aggressively increase our sequence length where
 # possible for very fast algorithms, but also not sit around forever if increasing that large of
 # a step for a slow algorithm causes it to run for a very long time
-MIN_TIMEOUT = 30
-MAX_TIMEOUT = 90
+MIN_TIMEOUT = 120
+MAX_TIMEOUT = 180
 # If we can run a strand this long within our timeout, just give up. We may be doing something
 # like using a constant-time function as a mock
 MAX_LEN = 25000
@@ -177,7 +177,7 @@ def fit_model(samples: list[AggregateResourceSample], key: Callable[[AggregateRe
     for deg in range(0, 8):
         model = Pipeline([
             ('poly', PolynomialFeatures(degree=deg)),
-            ('linear', Lasso(fit_intercept=False, positive=True, alpha=0.1))
+            ('linear', Lasso(fit_intercept=False, positive=True, alpha=0.1, max_iter=10000))
         ]).fit([[sample.seqlen] for sample in samples], [key(sample) for sample in samples])
         score = model.score([[sample.seqlen] for sample in samples], [key(sample) for sample in samples])
         if score > best_model_score + 0.05:
