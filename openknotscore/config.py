@@ -123,6 +123,13 @@ class OKSPConfig(ABC):
         '''
         pass
 
+    extension_source_files: str | list[str] = []
+    '''
+    A single or list of file paths or globs that should be loaded as input data to the pipeline not as
+    individual solutions to be run through the pipeline, but additional data to extend data loaded from
+    source_files. Namely, columns will be merged with eterna_id being the joining column
+    '''
+
     @staticmethod
     def filter_for_computation(df: pd.DataFrame) -> pd.DataFrame:
         '''

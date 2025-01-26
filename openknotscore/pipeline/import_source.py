@@ -20,6 +20,26 @@ def load_sources(source_globs: str | list[str]) -> pd.DataFrame:
         dfs.append(load_rdat(source))
     return pd.concat(dfs, ignore_index=True)
 
+def load_extension_sources(source_globs: str | list[str], df: pd.DataFrame) -> pd.DataFrame:
+    '''
+    Reads source files and merges into an existing dataframe
+    '''
+
+    _source_globs = [source_globs] if type(source_globs) == str else source_globs
+    source_files = list(itertools.chain.from_iterable(glob.glob(source) for source in _source_globs))
+
+    for source in source_files:
+        if not source.lower().endswith('csv'):
+            raise ValueError(f'Invalid file extension for source file {source} - only csv is supported')
+
+    for source in source_files:
+        extension = load_csv(source)
+        df.update(
+            df[['eterna_id']].merge(extension, on=['eterna_id'], how='left')
+        )
+    
+    return df
+
 def load_rdat(source_file: str):
     rdat = rdat_kit.RDATFile()
     with open(source_file, 'r') as f:
@@ -94,3 +114,10 @@ def get_global_blank_out(construct):
     BLANK_OUT3 = len(construct.sequence) - (construct.seqpos[-1] - construct.offset)
 
     return (BLANK_OUT5, BLANK_OUT3)
+
+def load_csv(source_file: str):
+    df = pd.read_csv(source_file)
+    df = df[[col for col in df.columns if col in ['eterna_id', 'score_start_idx', 'score_end_idx']]]
+    df['eterna_id'] = df['eterna_id'].astype(str)
+
+    return df

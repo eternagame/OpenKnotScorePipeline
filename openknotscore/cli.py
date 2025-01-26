@@ -8,7 +8,7 @@ import math
 from tqdm import tqdm
 import pandas as pd
 from typing import Iterable
-from .pipeline.import_source import load_sources
+from .pipeline.import_source import load_sources, load_extension_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
 from .pipeline.prediction.predict import predict, PredictionDB, PredictionStatus
 from .pipeline import scoring
@@ -122,7 +122,12 @@ def run_cli():
             preddb.clear_predictor(args.predictor)
     else:
         print(f'{datetime.now()} Loading data...')
-        data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))
+        data: pd.DataFrame = config.filter_for_computation(
+            load_extension_sources(
+                config.extension_source_files,
+                load_sources(config.source_files)
+            )
+        )
 
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
             print(f'{datetime.now()} Generating tasks...')
