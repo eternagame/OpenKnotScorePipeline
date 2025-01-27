@@ -1,8 +1,7 @@
 import sys
 from os import path
-sys.path.append(path.join(path.dirname(__file__), '../..'))
 
-from openknotscore.cli import OKSPConfig
+from openknotscore.config import OKSPConfig
 from openknotscore.substation.runners.slurm import SlurmRunner
 
 class Config(OKSPConfig):

@@ -166,6 +166,10 @@ class OKSPConfig(ABC):
     ]
 
     runner: Runner = LocalRunner()
+    '''
+    How the computations are actually executed. See openknotscore.substation.runners for available
+    options
+    '''
 
     runtime_buffer = 1.15
     '''
