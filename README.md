@@ -15,7 +15,7 @@ for packages supported via arnie, and for other packages:
 Also, set `CONTRAFOLD_2_PARAMS_PATH` to the location of the contrafold 2 parameter file (we run Eternafold
 instead of contrafold in order to use the latest fixes eg avoiding <3 nt loops, but with contrafold parameters)
 
-## Full pipeline runs
+### Full pipeline runs
 The recommended setup is as follows:
 
 Create a directory for your pipeline run, such as one of those in `examples/`. Create a python file
@@ -40,11 +40,11 @@ dependencies. You might do this by setting up a container, by creating "immutabl
 containing the predictors, or tar them and extract as a preperatory step for pipeline runs
 (eg using the `init_script` parameter for `SlurmRunner` when configuring the runner in your config).
 
-## As a dependency
+### As a dependency
 If you need to use this library as a dependency, such as just to access the scoring functions,
 you can do so via `pip install https://github.com/eternagame/OpenKnotScorePipeline`
 
-## For development
+### For development
 After cloing this repository, you can run `pip install .`. You could then run projects in the `examples/`
 directory or create new projects under `data/`
 
