@@ -122,7 +122,7 @@ def run_cli():
             preddb.clear_predictor(args.predictor)
     else:
         print(f'{datetime.now()} Loading data...')
-        data: pd.DataFrame = config.filter_for_computation(
+        data: pd.DataFrame = config.preprocess_data(
             load_extension_sources(
                 config.extension_source_files,
                 load_sources(config.source_files)

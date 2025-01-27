@@ -131,7 +131,7 @@ class OKSPConfig(ABC):
     '''
 
     @staticmethod
-    def filter_for_computation(df: pd.DataFrame) -> pd.DataFrame:
+    def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         '''
         If you don't want to run computations for all data in source_files, use this function to
         filter down to just the rows you want to compute for
