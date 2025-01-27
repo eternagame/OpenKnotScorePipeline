@@ -22,10 +22,10 @@ Create a directory for your pipeline run, such as one of those in `examples/`. C
 defining a subclass of `openknotscore.config.OKSPConfig` called `Config`, filling out the parameters
 as necessary (refer to the examples or the docstrings for how this can be configured).
 
-```
+```sh
 python -m venv .venv
 source .venv/bin/activate
-pip install https://github.com/eternagame/OpenKnotScorePipeline
+pip install git+https://github.com/eternagame/OpenKnotScorePipeline
 pip freeze > frozen-requirements.txt
 ```
 This ensures the exact set of dependencies are recorded for auditing and reproducibility. If you later
@@ -42,7 +42,7 @@ containing the predictors, or tar them and extract as a preperatory step for pip
 
 ### As a dependency
 If you need to use this library as a dependency, such as just to access the scoring functions,
-you can do so via `pip install https://github.com/eternagame/OpenKnotScorePipeline`
+you can do so via `pip install git+https://github.com/eternagame/OpenKnotScorePipeline`
 
 ### For development
 After cloing this repository, you can run `pip install .`. You could then run projects in the `examples/`
