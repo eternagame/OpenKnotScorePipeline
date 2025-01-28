@@ -95,7 +95,7 @@ class CSVOutput(OutputConfig):
 
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
         os.makedirs(path.dirname(self.output_path), exist_ok=True)
-        df.to_csv(self.output_path, sep=self.sep, compression=self.compression)
+        df.to_csv(self.output_path, sep=self.sep, compression=self.compression, index=False)
 
 class ParquetOutput(OutputConfig):
     def __init__(self, output_path: str, compression: Literal['snappy', 'gzip', 'brotli', 'lz4', 'zstd'] | None = None):
