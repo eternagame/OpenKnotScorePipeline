@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Callable
 from abc import ABC, abstractmethod
 import itertools
 import glob
@@ -105,6 +105,16 @@ class ParquetOutput(OutputConfig):
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
         os.makedirs(path.dirname(self.output_path), exist_ok=True)
         df.to_parquet(self.output_path, compression=self.compression)
+
+class OutputFilter(OutputConfig):
+    def __init__(self, filter: Callable[[pd.DataFrame], pd.DataFrame], outputs: list[OutputConfig]):
+        self.filter = filter
+        self.outputs = outputs
+
+    def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
+        filtered = self.filter(df)
+        for out in self.outputs:
+            out.write(filtered, config)
 
 class OKSPConfig(ABC):
     @property
