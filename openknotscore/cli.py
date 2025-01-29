@@ -262,7 +262,7 @@ def run_cli():
                 data = pd.merge(data,preds,how="left",left_index=True,right_index=True)
 
             prediction_names = [
-                name for name in [*nonreactive_prediction_names, *reactive_prediction_names] if name in data.columns
+                name for name in [*nonreactive_prediction_names, *reactive_prediction_names, 'target_structure'] if name in data.columns
             ]
 
             def getECSperRow(row):

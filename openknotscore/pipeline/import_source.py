@@ -88,6 +88,21 @@ def load_rdat(source_file: str):
                 score_start_idx = BLANK_OUT5 + 1
             if score_end_idx is None:
                 score_end_idx = len(seq) - BLANK_OUT3
+            structure = None
+            if 'structure' in sequence.annotations:
+                structure = sequence.annotations.get('structure')[0] or None
+
+            if structure != None:
+                if len(structure) != len(seq):
+                    print('Invalid target structure - length mismatch', structure)
+                    # structure = None
+
+                try:
+                    from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
+                    convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True), len(structure))
+                except Exception as e:
+                    print(f'Invalid target structure ({e}): {structure}')
+                    structure = None
 
             # Get reactivity data and errors
             reactivity = [None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3
@@ -104,11 +119,12 @@ def load_rdat(source_file: str):
                 'warning': warning,
                 'reactivity': reactivity,
                 'errors': errors,
-                'score_start_idx': score_start_idx,
-                'score_end_idx': score_end_idx,
                 'modifier': modifier,
                 'checmical': chemical,
                 'temperature': temperature,
+                'target_structure': structure,
+                'score_start_idx': score_start_idx,
+                'score_end_idx': score_end_idx,
             }
 
             # Add the row to the whole dataframe
