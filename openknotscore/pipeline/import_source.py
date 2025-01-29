@@ -45,6 +45,14 @@ def load_rdat(source_file: str):
     with open(source_file, 'r') as f:
         rdat.load(f)
 
+    modifier = rdat.annotations.get('modifier')
+    if len(modifier) > 1:
+        raise Exception('RDAT contained multiple modifier annotations - if this was expected, we need to change our input and output handling to accomodate')
+    chemical = rdat.annotations.get('chemical')
+    temperature = rdat.annotations.get('temperature')
+    if len(temperature) > 1:
+        raise Exception('RDAT contained multiple temperature annotations - if this was expected, we need to change our input and output handling to accomodate')
+
     for construct in rdat.constructs.values():
         seqList = []
 
@@ -98,6 +106,9 @@ def load_rdat(source_file: str):
                 'errors': errors,
                 'score_start_idx': score_start_idx,
                 'score_end_idx': score_end_idx,
+                'modifier': modifier,
+                'checmical': chemical,
+                'temperature': temperature,
             }
 
             # Add the row to the whole dataframe
