@@ -96,13 +96,13 @@ def load_rdat(source_file: str):
                 if len(structure) != len(seq):
                     print('Invalid target structure - length mismatch', structure)
                     structure = None
-
-                try:
-                    from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
-                    convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True), len(structure))
-                except Exception as e:
-                    print(f'Invalid target structure ({e}): {structure}')
-                    structure = None
+                else:
+                    try:
+                        from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
+                        convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True), len(structure))
+                    except Exception as e:
+                        print(f'Invalid target structure ({e}): {structure}')
+                        structure = None
 
             # Get reactivity data and errors
             reactivity = [None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3
