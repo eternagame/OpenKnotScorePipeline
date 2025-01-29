@@ -86,13 +86,27 @@ def run_cli():
             colname for colname in data.columns
             if config.imported_column_map.get(colname, colname.removesuffix('_PRED')) in predictor_names
         )
+
+        def is_valid_structure(structure, sequence):
+            if pd.isna(structure): return False
+            if all([char == "x" for char in structure]): return False
+            if structure.strip() == '': return False
+            if len(structure) != len(sequence): return False
+
+            try:
+                convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True), len(structure))
+            except:
+                return False
+
+            return True
+
         with PredictionDB(pred_db_path, 'c') as preddb:
             preddb.upsert_success(
                 (
                     (config.imported_column_map.get(colname, colname.removesuffix('_PRED')), sequence, None, structure)
                     for colname in available_columns
-                    for (sequence, structure) in data[['sequence', colname]].itertuples(False)
-                    if not (pd.isna(structure) or all([char == "x" for char in structure]))
+                    for (idx, sequence, structure) in data[['sequence', colname]].itertuples(True)
+                    if is_valid_structure(structure, sequence)
                 ),
                 args.override
             )
@@ -110,7 +124,7 @@ def run_cli():
                         (config.imported_column_map.get(colname, colname.removesuffix('_PRED')), sequence, reactivity, structure)
                         for colname in reactive_available_columns
                         for (sequence, reactivity, structure) in data[['sequence', 'reactivity', colname]].itertuples(False)
-                        if not (pd.isna(structure) or all([char == "x" for char in structure]))
+                        if is_valid_structure(structure, sequence)
                     ),
                     args.override
                 )
