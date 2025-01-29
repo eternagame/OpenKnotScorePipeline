@@ -34,7 +34,7 @@ class RDATOutput(OutputConfig):
             if not source.lower().endswith('rdat'):
                 raise ValueError(f'Cant write rdat for {source} - input needs to be rdat')
 
-        for source in source_files:    
+        for source in source_files:
             rdat = rdat_kit.RDATFile()
             with open(source, 'r') as f:
                 rdat.load(f)
@@ -47,7 +47,9 @@ class RDATOutput(OutputConfig):
                     
                     # There may be no processed data (OKS, predictions) associated with the sequence
                     # if the sequence had low-quality or missing reactivity data, so we skip those rows
-                    row = df.loc[(df['sequence'] == seq) & (df['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3))].squeeze()
+                    row = df[df['sequence'] == seq]
+                    row = row[row['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3)]
+                    row = row.squeeze()
                     if row.empty:
                         continue
 
