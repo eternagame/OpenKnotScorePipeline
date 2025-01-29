@@ -8,6 +8,7 @@ import math
 from tqdm import tqdm
 import pandas as pd
 from typing import Iterable
+from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
 from .pipeline.import_source import load_sources, load_extension_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
 from .pipeline.prediction.predict import predict, PredictionDB, PredictionStatus
