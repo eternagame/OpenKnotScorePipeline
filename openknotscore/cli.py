@@ -303,6 +303,7 @@ def run_cli():
 
             data = data.rename(columns={c: c+'_PRED' for c in prediction_names})
 
+            print('Writing output files...')
             for output in config.output_configs:
                 output.write(data, config)
 
