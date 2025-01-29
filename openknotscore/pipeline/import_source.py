@@ -95,7 +95,7 @@ def load_rdat(source_file: str):
             if structure != None:
                 if len(structure) != len(seq):
                     print('Invalid target structure - length mismatch', structure)
-                    # structure = None
+                    structure = None
 
                 try:
                     from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
