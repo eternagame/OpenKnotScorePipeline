@@ -44,6 +44,8 @@ class Config(OKSPConfig):
                 # Pass extra content which should be run at the start of sbatch scripts, eg to load
                 # packages or set environment variables
                 # init_script='',
+                # Make sure the runtime of jobs has this many extra seconds free eg to run the init_script
+                # runtime_buffer=0,
             ),
             # We set this as the second one as it is more expensive - we'd prefer not to use it unless
             # we have to!
@@ -62,6 +64,7 @@ class Config(OKSPConfig):
                 # GPU architecture, CPU model for benchmarking, etc
                 constraints='GPU_MEM:24GB',
                 # init_script='',
+                # rutime_buffer=0
             )
         ]
     )

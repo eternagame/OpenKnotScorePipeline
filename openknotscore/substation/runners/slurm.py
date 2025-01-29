@@ -24,6 +24,7 @@ class SlurmConfig:
     gpu_memory: int = 0
     constraints: str = None
     init_script: str = None
+    runtime_buffer: int = 0
 
 @dataclass
 class SlurmRunner(Runner):
@@ -69,12 +70,12 @@ class SlurmRunner(Runner):
             ) for alloc in config.allocations
         )
 
-    def config_max_runtime(self, config: ComputeConfiguration):
+    def config_max_runtime(self, config: ComputeConfiguration, buffer: int):
         return max(
             max(
                 sum(task.utilized_resources.max_runtime for task in queue.tasks) if len(queue.tasks) > 0 else 0 for queue in alloc.queues
             ) for alloc in config.allocations
-        )
+        ) + buffer
     
     def config_max_gpus(self, config: ComputeConfiguration):
         return max(
@@ -92,7 +93,7 @@ class SlurmRunner(Runner):
                     config.max_cores,
                     config.max_cores * config.max_mem_per_core,
                     config.max_gpus,
-                    config.max_timeout,
+                    config.max_timeout - config.runtime_buffer,
                     config.gpu_memory,
                 )
                 for config in self.configs
@@ -119,7 +120,7 @@ class SlurmRunner(Runner):
             init_script = self.configs[schedule.compute_configurations.index(comp_config)].init_script
             if init_script: cmds.insert(0, init_script)
 
-            max_runtime = self.config_max_runtime(comp_config)
+            max_runtime = self.config_max_runtime(comp_config, self.configs[schedule.compute_configurations.index(comp_config)].runtime_buffer)
             sbatch(
                 cmds,
                 f'{job_name}-{idx+1}' if len(schedule.nonempty_compute_configurations()) > 1 else job_name,
@@ -147,7 +148,7 @@ class SlurmRunner(Runner):
                     config.max_cores,
                     config.max_cores * config.max_mem_per_core,
                     config.max_gpus,
-                    config.max_timeout,
+                    config.max_timeout - config.runtime_buffer,
                     config.gpu_memory,
                 )
                 for config in self.configs
@@ -181,18 +182,18 @@ class SlurmRunner(Runner):
         print(f'Active core-hours (max): {max_core_seconds / 60 / 60: .2f}')
         print(f'Active core-hours (expected): {expected_core_seconds / 60 / 60: .2f}')
         print(f'Allocated core-hours: {sum([
-            self.config_max_cpus(config, self.configs[schedule.compute_configurations.index(config)].max_mem_per_core) * self.config_max_runtime(config) * len(config.nonempty_allocations())
+            self.config_max_cpus(config, self.configs[schedule.compute_configurations.index(config)].max_mem_per_core) * self.config_max_runtime(config, self.configs[schedule.compute_configurations.index(config)].runtime_buffer) * len(config.nonempty_allocations())
             for config in nonempty_configs
         ]) / 60 / 60: .2f}')
         if max_gpu_seconds > 0:
             print(f'Active GPU-hours (max): {max_gpu_seconds / 60 / 60: .2f}')
             print(f'Active GPU-hours (expected): {expected_gpu_seconds / 60 / 60: .2f}')
             print(f'Allocated GPU-hours: {sum([
-                self.config_max_gpus(config) * self.config_max_runtime(config) * len(config.nonempty_allocations())
+                self.config_max_gpus(config) * self.config_max_runtime(config, self.configs[schedule.compute_configurations.index(config)].runtime_buffer) * len(config.nonempty_allocations())
                 for config in nonempty_configs
             ]) / 60 / 60: .2f}')
         print(f'Number of jobs: {len(nonempty_allocations)}')
-        longest_job_timeout = max(self.config_max_runtime(config) for config in nonempty_configs)
+        longest_job_timeout = max(self.config_max_runtime(config, self.configs[schedule.compute_configurations.index(config)].runtime_buffer) for config in nonempty_configs)
         print(f'Longest job timeout: {longest_job_timeout / 60 / 60: .2f} hours ({longest_job_timeout} seconds)')
         longest_job_expected = max(alloc.utilized_resources.avg_runtime for alloc in nonempty_allocations)
         print(f'Longest job runtime (expected): {longest_job_expected / 60 / 60: .2f} hours ({longest_job_expected} seconds)')
