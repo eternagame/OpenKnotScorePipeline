@@ -252,7 +252,6 @@ def run_cli():
                 predictor.prediction_names for predictor in config.enabled_predictors
                 if predictor.uses_experimental_reactivities
             ))
-            prediction_names = [*nonreactive_prediction_names, *reactive_prediction_names]
             tqdm.pandas(desc='Retrieving predictions')
             with PredictionDB(pred_db_path, 'c') as preddb:
                 preds = data.progress_apply(
@@ -261,7 +260,11 @@ def run_cli():
                     result_type='expand'
                 )
                 data = pd.merge(data,preds,how="left",left_index=True,right_index=True)
-            
+
+            prediction_names = [
+                name for name in [*nonreactive_prediction_names, *reactive_prediction_names] if name in data.columns
+            ]
+
             def getECSperRow(row):
                 df = row[prediction_names].apply(
                     scoring.calculateEternaClassicScore,
