@@ -53,10 +53,12 @@ def load_rdat(source_file: str):
     modifier = rdat.annotations.get('modifier')
     if len(modifier) > 1:
         raise Exception('RDAT contained multiple modifier annotations - if this was expected, we need to change our input and output handling to accomodate')
+    modifier = modifier[0]
     chemical = rdat.annotations.get('chemical')
     temperature = rdat.annotations.get('temperature')
     if len(temperature) > 1:
         raise Exception('RDAT contained multiple temperature annotations - if this was expected, we need to change our input and output handling to accomodate')
+    temperature = temperature[0]
 
     for construct in rdat.constructs.values():
         seqList = []
