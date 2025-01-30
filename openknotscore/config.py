@@ -43,7 +43,21 @@ class RDATOutput(OutputConfig):
                     BLANK_OUT5, BLANK_OUT3 = get_global_blank_out(construct)
 
                     seq = sequence.annotations["sequence"][0]
-                    annotationList = sequence.annotations.setdefault('Eterna', [])
+                    annotationList = [
+                        annot for annot in sequence.annotations.get('Eterna', [])
+                        if not annot.startswith((
+                            'score:ensemble_openknot_score:',
+                            'score:ensemble_eterna_classic_score:',
+                            'score:ensemble_crossed_pair_quality_score:',
+                            'score:target_openknot_score:',
+                            'score:target_eterna_classic_score:',
+                            'score:target_crossed_pair_quality_score:',
+                            'best_fit:tags',
+                            'best_fit:structures',
+                            'best_fit:eterna_classic_scores',
+                        ))
+                    ]
+                    sequence.annotations['Eterna'] = annotationList
                     
                     # There may be no processed data (OKS, predictions) associated with the sequence
                     # if the sequence had low-quality or missing reactivity data, so we skip those rows
@@ -54,9 +68,13 @@ class RDATOutput(OutputConfig):
                         continue
 
                     # Add annotations with the processed data to the RDAT
-                    annotationList.append(f"score:openknot_score:{row['ensemble_OKS']:.6f}")
-                    annotationList.append(f"score:eterna_classic_score:{row['ensemble_ECS']:.6f}")
-                    annotationList.append(f"score:crossed_pair_quality_score:{row['ensemble_CPQ']:.6f}")
+                    annotationList.append(f"score:ensemble_openknot_score:{row['ensemble_OKS']:.6f}")
+                    annotationList.append(f"score:ensemble_eterna_classic_score:{row['ensemble_ECS']:.6f}")
+                    annotationList.append(f"score:ensemble_crossed_pair_quality_score:{row['ensemble_CPQ']:.6f}")
+                    if row.get('target_structure_PRED') is not None:
+                        annotationList.append(f"score:target_openknot_score:{row['target_structure_OKS']:.6f}")
+                        annotationList.append(f"score:target_eterna_classic_score:{row['target_structure_ECS']:.6f}")
+                        annotationList.append(f"score:target_crossed_pair_quality_score:{row['target_structure_CPQ'][1]:.6f}")
                     annotationList.append(f"best_fit:tags:{','.join(row['ensemble_tags'])}")
                     annotationList.append(f"best_fit:structures:{','.join(row['ensemble_structures'])}")
                     annotationList.append(f"best_fit:eterna_classic_scores:{','.join([f'{v:.6f}' for v in row['ensemble_structures_ecs']])}")
