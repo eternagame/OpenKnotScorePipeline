@@ -46,12 +46,19 @@ class RDATOutput(OutputConfig):
                     annotationList = [
                         annot for annot in sequence.annotations.get('Eterna', [])
                         if not annot.startswith((
+                            'score:openknot_score',
+                            'score:eterna_classic_score',
+                            'score:crossed_pair_score'
+                            'score:crossed_pair_quality_score',
                             'score:ensemble_openknot_score:',
                             'score:ensemble_eterna_classic_score:',
+                            'score:ensemble_crossed_pair_score:',
                             'score:ensemble_crossed_pair_quality_score:',
                             'score:target_openknot_score:',
                             'score:target_eterna_classic_score:',
+                            'score:target_crossed_pair_score:',
                             'score:target_crossed_pair_quality_score:',
+                            'score:best_cc',
                             'best_fit:tags',
                             'best_fit:structures',
                             'best_fit:eterna_classic_scores',
