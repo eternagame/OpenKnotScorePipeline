@@ -208,14 +208,14 @@ class OKSPConfig(ABC):
         predictors.RnastructureShapePredictor(as_name='rnastructure+SHAPE'),
         predictors.ShapeknotsPredictor(as_name='shapeknots'),
         predictors.Vienna2PkFromBppPredictor()
-            .add_heuristic('threshknot', as_name='vienna_2.TK')
-            .add_heuristic('hungarian', as_name='vienna_2.HN'),
+            .add_heuristic('threshknot', as_name='vienna2.TK')
+            .add_heuristic('hungarian', as_name='vienna2.HN'),
         predictors.EternafoldPkFromBppPredictor()
             .add_heuristic('threshknot', as_name='eternafold.TK')
             .add_heuristic('hungarian', as_name='eternafold.HN'),
         predictors.Contrafold2PkFromBppPredictor()
-            .add_heuristic('threshknot', as_name='contrafold_2.TK')
-            .add_heuristic('hungarian', as_name='contrafold_2.HN'),
+            .add_heuristic('threshknot', as_name='contrafold2.TK')
+            .add_heuristic('hungarian', as_name='contrafold2.HN'),
         predictors.RibonanzaNetSSPredictor('ribonanzanet-ss'),
         predictors.RibonanzaNetShapeDerivedPredictor()
             .add_configuration('2a3', 'rnastructure', as_name='rnet-2a3-rnastructure')
