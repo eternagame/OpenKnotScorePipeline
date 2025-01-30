@@ -144,6 +144,11 @@ class OutputFilter(OutputConfig):
             out.write(filtered, config)
 
 class OKSPConfig(ABC):
+    name: str | None = None
+    '''
+    Identifier for this project eg to be used in compute job names
+    '''
+    
     @property
     @abstractmethod
     def db_path() -> str | list[str]:

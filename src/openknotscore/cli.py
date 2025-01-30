@@ -64,7 +64,7 @@ def run_cli():
                 )
                 for predictor in config.enabled_predictors
             ],
-            'oksp-predict-generate-model'
+            'oksp-predict-generate-model' + (f'-{config.name}' if config.name else '')
         )
     elif args.cmd == 'predict-import':
         print(f'{datetime.now()} Loading data...')
@@ -194,7 +194,7 @@ def run_cli():
                         preddb.upsert_queued(
                             (task.runnable.args[0], task.runnable.args[1], task.runnable.args[2]) for task in tasks
                         )
-                config.runner.run(pred_tasks, 'oksp-predict', on_queued)
+                config.runner.run(pred_tasks, 'oksp-predict' + (f'-{config.name}' if config.name else ''), on_queued)
                 print(f'{datetime.now()} Completed')
     
         if args.cmd == 'predict-check-failed':
