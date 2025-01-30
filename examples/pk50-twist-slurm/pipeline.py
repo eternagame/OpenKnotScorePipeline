@@ -1,8 +1,7 @@
 import sys
 from os import path
-sys.path.append(path.join(path.dirname(__file__), '../..'))
 
-from openknotscore.cli import OKSPConfig
+from openknotscore.config import OKSPConfig, RDATOutput, CSVOutput, ParquetOutput
 from openknotscore.substation.runners.slurm import SlurmRunner
 
 class Config(OKSPConfig):
@@ -68,3 +67,10 @@ class Config(OKSPConfig):
             )
         ]
     )
+
+    output_configs = [
+        RDATOutput(path.join(path.dirname(__file__), 'output/rdat')),
+        RDATOutput(path.join(path.dirname(__file__), 'output/rdat-eterna'), 100),
+        CSVOutput(path.join(path.dirname(__file__), 'output/structures.csv')),
+        ParquetOutput(path.join(path.dirname(__file__), 'output/structures.parquet.gz'), 'gzip'),
+    ]
