@@ -45,7 +45,7 @@ If you need to use this library as a dependency, such as just to access the scor
 you can do so via `pip install git+https://github.com/eternagame/OpenKnotScorePipeline`
 
 ### For development
-After cloing this repository, you can run `pip install .`. You could then run projects in the `examples/`
+After cloing this repository, you can run `pip install --editable .`. You could then run projects in the `examples/`
 directory or create new projects under `data/`
 
 ## How to use this pipeline
