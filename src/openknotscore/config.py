@@ -9,7 +9,7 @@ import math
 import pandas as pd
 import rdat_kit
 from .pipeline.prediction import predictors
-from .pipeline.import_source import get_global_blank_out
+from .pipeline.import_source import get_global_blank_out, SourceDef
 from .substation.runners.runner import Runner
 from .substation.runners.local import LocalRunner
 
@@ -147,9 +147,11 @@ class OKSPConfig(ABC):
 
     @property
     @abstractmethod
-    def source_files() -> str | list[str]:
+    def source_files() -> SourceDef | list[SourceDef]:
         '''
         A single or list of file paths or globs that should be loaded as input data to the pipeline
+        Instead of just a path/glob you can also provide a dict containing additional values to be
+        attached to each row
         '''
         pass
 

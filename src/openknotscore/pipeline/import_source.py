@@ -1,23 +1,28 @@
+from typing import TypedDict, Any
 import glob
 import itertools
 import pandas as pd
 import rdat_kit
 
-def load_sources(source_globs: str | list[str]) -> pd.DataFrame:
+SourceDef = str | TypedDict('SourceDef', {'path': str, 'extensions': dict[str, Any]})
+
+def load_sources(source_defs: SourceDef | list[SourceDef]) -> pd.DataFrame:
     '''
     Reads source files into a single dataframe
     '''
 
-    _source_globs = [source_globs] if type(source_globs) == str else source_globs
-    source_files = list(itertools.chain.from_iterable(glob.glob(source) for source in _source_globs))
+    source_defs = source_defs if type(source_defs) == list else [source_defs]
+    source_defs = [source if type(source) == dict else {'path': source, 'extensions': {}} for source in source_defs]
 
-    for source in source_files:
-        if not source.lower().endswith('rdat'):
-            raise ValueError(f'Invalid file extension for source file {source} - only rdat is supported')
-    
     dfs = []
-    for source in source_files:
-        dfs.append(load_rdat(source))
+    for source in source_defs:
+        for source_file in glob.glob(source['path']):
+            if not source_file.lower().endswith('rdat'):
+                raise ValueError(f'Invalid file extension for source file {source} - only rdat is supported')
+            df = load_rdat(source_file)
+            for (k, v) in source['extensions'].items():
+                df[k] = v
+            dfs.append(df)
     return pd.concat(dfs, ignore_index=True)
 
 def load_extension_sources(source_globs: str | list[str], df: pd.DataFrame) -> pd.DataFrame:
