@@ -266,7 +266,10 @@ class PknotsPredictor(ArniePkPredictor):
 
 class SpotrnaPredictor(ArniePkPredictor):
     def __init__(self, as_name: str, arnie_kwargs: dict = None):
-        super().__init__('spotrna', as_name, arnie_kwargs)
+        super().__init__('spotrna', as_name, {
+            'cpu': 1,
+            **(arnie_kwargs or {})
+        })
 
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
