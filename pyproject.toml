@@ -1,0 +1,33 @@
+[project]
+name = "openknotscorepipeline"
+version = "1.0.0"
+authors = [
+  { name="Das Lab", email="thedaslab@stanford.edu" },
+]
+description = "Python pipeline to generate OpenKnot Scores for Eterna sequence libraries"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "arnie~=0.2.3",
+  "numpy~=2.1.2",
+  "pandas~=2.2.3",
+  "psutil~=6.1.1",
+  "pyarrow~=19.0.0",
+  "rdat-kit~=1.6.3",
+  "scikit-learn~=1.6.0",
+  "tqdm~=4.66.5",
+  "xxhash~=3.5.0"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/eternagame/OpenKnotScorePipeline"
+"Bug Tracker" = "https://github.com/eternagame/OpenKnotScorePipeline/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
