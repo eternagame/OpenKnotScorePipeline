@@ -13,7 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "arnie~=0.2.3",
+  "arnie~=0.2.4",
   "numpy~=2.1.2",
   "pandas~=2.2.3",
   "psutil~=6.1.1",
