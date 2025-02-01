@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import traceback
 import os
 import subprocess
 import re
@@ -12,8 +13,10 @@ except Exception as e:
     # Arnie unfortunately raises an exception on import if no predictors are configured
     # If the user isn't using arnie, we don't want to error, so we'll defer raising an error
     # to when attempting to use these methods
+    arnie_import_exc = traceback.format_exc()
     def arnie_load_failed(*args, **kwargs):
-        raise e
+        print(arnie_import_exc)
+        raise Exception('Arnie import failed - see previous log')
     mfe = bpps = pk_predict = pk_predict_from_bpp = arnie_load_failed
 from ...substation.scheduler.domain import UtilizedResources
 
