@@ -8,7 +8,8 @@ import math
 from tqdm import tqdm
 import pandas as pd
 from typing import Iterable
-from .pipeline.import_source import load_sources
+from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
+from .pipeline.import_source import load_sources, load_extension_sources
 from .pipeline.prediction.sample import generate_predictor_resource_model, MODEL_TIMEOUT
 from .pipeline.prediction.predict import predict, PredictionDB, PredictionStatus
 from .pipeline import scoring
@@ -30,11 +31,11 @@ def run_cli():
     forecast_parser.add_argument('--skip-failed', action='store_true', dest='skip_failed', help='Dont rerun failed predictions')
     model_parser = subparsers.add_parser('predict-generate-model', help='run predictors with sample inputs and generate resource usage models')
     model_parser.add_argument('--cpus', type=int, dest='cpus', help='cpus to allocate per predictor, in MB (limits not supported for local runner)', default=1)
-    model_parser.add_argument('--max-memory', type=int, dest='max_memory', help='maximum memory to allocate per predictor, in MB (limits not supported for local runner)', default=1000*8)
-    model_parser.add_argument('--max-gpu-memory', type=int, dest='max_gpu_memory', help='maximum GPU memory to allocate per predictor if it supports GPU, in MB (limits not supported for local runner)', default=0)
+    model_parser.add_argument('--max-memory', type=int, dest='max_memory', help='maximum memory to allocate per predictor, in MB (limits not supported for local runner)', default=1000*16)
+    model_parser.add_argument('--max-gpu-memory', type=int, dest='max_gpu_memory', help='maximum GPU memory to allocate per predictor if it supports GPU, in MB (limits not supported for local runner)', default=1000*70)
     import_parser = subparsers.add_parser('predict-import', help='import pre-computed structures from another file into the pipeline database')
     import_parser.add_argument(dest='file', help='path to the file to import structures from')
-    import_parser.add_argument('--override', dest='override', help='override values in the database if they already exist', default=False)
+    import_parser.add_argument('--override', action='store_true', dest='override', help='override values in the database if they already exist')
     check_failed_parser = subparsers.add_parser('predict-check-failed', help='show information about missing or failed predictions')
     check_failed_parser.add_argument('--show-errors', action='store_true', dest='show_errors', help='if errors were encountered, print what they were', default=False)
     check_failed_parser.add_argument('--nrows', type=int, dest='nrows', help='for missing/failed predictions, print the first n rows of source data which failed per unique failure', default=0)
@@ -57,20 +58,22 @@ def run_cli():
                         args.cpus,
                         # Note we don't use the runtime/memory buffer here, because the user is specifying
                         # an actual cap they want, we're not adding overage for an estimate
-                        math.ceil(args.max_memory * 1024 * 1024),
-                        args.max_gpu_memory if predictor.gpu else 0
+                        args.max_memory * 1024 * 1024,
+                        args.max_gpu_memory * 1024 * 1024 if predictor.gpu else 0
                     )
                 )
                 for predictor in config.enabled_predictors
             ],
-            'oksp-predict-generate-model'
+            'oksp-predict-generate-model' + (f'-{config.name}' if config.name else '')
         )
     elif args.cmd == 'predict-import':
         print(f'{datetime.now()} Loading data...')
+        def parse_list(val: str):
+            return [None if x.strip() in ('None', 'nan', 'NaN') else float(x) for x in val.removeprefix('[').removesuffix(']').split(',')]
         if args.file.endswith('.csv'):
-            data = pd.read_csv(args.file)
+            data = pd.read_csv(args.file, converters={'reactivity': parse_list})
         elif args.file.endswith('.tsv'):
-            data = pd.read_csv(args.file, sep='\t')
+            data = pd.read_csv(args.file, sep='\t', converters={'reactivity': parse_list})
         elif args.file.endswith('.pkl'):
             data = pd.read_pickle(args.file)
         else:
@@ -80,17 +83,52 @@ def run_cli():
         predictor_names = list(itertools.chain.from_iterable(
             predictor.prediction_names for predictor in config.enabled_predictors if not predictor.uses_experimental_reactivities
         ))
-        available_columns = list(colname for colname in data.columns if colname in predictor_names)
+        available_columns = list(
+            colname for colname in data.columns
+            if config.imported_column_map.get(colname, colname.removesuffix('_PRED')) in predictor_names
+        )
+
+        def is_valid_structure(structure, sequence):
+            if pd.isna(structure): return False
+            if all([char == "x" for char in structure]): return False
+            if structure.strip() == '': return False
+            if len(structure) != len(sequence): return False
+
+            try:
+                convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True), len(structure))
+            except:
+                return False
+
+            return True
+
         with PredictionDB(pred_db_path, 'c') as preddb:
             preddb.upsert_success(
                 (
-                    (sequence, structure, None)
-                    for col in set(predictor_names).intersection(available_columns)
-                    for (sequence, structure) in data[['sequence', col]].itertuples(False)
-                    if not (pd.isna(structure) or all([char == "x" for char in structure]))
+                    (config.imported_column_map.get(colname, colname.removesuffix('_PRED')), sequence, None, structure)
+                    for colname in available_columns
+                    for (idx, sequence, structure) in data[['sequence', colname]].itertuples(True)
+                    if is_valid_structure(structure, sequence)
                 ),
                 args.override
             )
+        if 'reactivity' in data.columns:
+            reactive_predictor_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in config.enabled_predictors if predictor.uses_experimental_reactivities
+            ))
+            reactive_available_columns = list(
+                colname for colname in data.columns
+                if config.imported_column_map.get(colname, colname.removesuffix('_PRED')) in reactive_predictor_names
+            )
+            with PredictionDB(pred_db_path, 'c') as preddb:
+                preddb.upsert_success(
+                    (
+                        (config.imported_column_map.get(colname, colname.removesuffix('_PRED')), sequence, reactivity, structure)
+                        for colname in reactive_available_columns
+                        for (sequence, reactivity, structure) in data[['sequence', 'reactivity', colname]].itertuples(False)
+                        if is_valid_structure(structure, sequence)
+                    ),
+                    args.override
+                )
         
         print(f'{datetime.now()} Completed')
     elif args.cmd == 'predict-clear':
@@ -99,7 +137,12 @@ def run_cli():
             preddb.clear_predictor(args.predictor)
     else:
         print(f'{datetime.now()} Loading data...')
-        data: pd.DataFrame = config.filter_for_computation(load_sources(config.source_files))
+        data: pd.DataFrame = config.preprocess_data(
+            load_extension_sources(
+                config.extension_source_files,
+                load_sources(config.source_files)
+            )
+        )
 
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
             print(f'{datetime.now()} Generating tasks...')
@@ -151,7 +194,7 @@ def run_cli():
                         preddb.upsert_queued(
                             (task.runnable.args[0], task.runnable.args[1], task.runnable.args[2]) for task in tasks
                         )
-                config.runner.run(pred_tasks, 'oksp-predict', on_queued)
+                config.runner.run(pred_tasks, 'oksp-predict' + (f'-{config.name}' if config.name else ''), on_queued)
                 print(f'{datetime.now()} Completed')
     
         if args.cmd == 'predict-check-failed':
@@ -164,14 +207,15 @@ def run_cli():
                 if predictor.uses_experimental_reactivities
             ))
             prediction_names = [*nonreactive_prediction_names, *reactive_prediction_names]
-            tqdm.pandas(desc='Retrieving predictions')
             with PredictionDB(pred_db_path, 'c') as preddb:
+                tqdm.pandas(desc='Retrieving errors')
                 errors = data.progress_apply(
                     lambda row: preddb.get_failed(row['sequence'], row.get('reactivity'), nonreactive_prediction_names, reactive_prediction_names),
                     axis=1,
                     result_type='expand'
                 )
                 data = pd.merge(data,errors,how="left",left_index=True,right_index=True)
+                tqdm.pandas(desc='Retrieving predictions')
                 exists = data.progress_apply(
                     lambda row: preddb.get_prediction_success(row['sequence'], row.get('reactivity'), nonreactive_prediction_names, reactive_prediction_names),
                     axis=1,
@@ -209,7 +253,6 @@ def run_cli():
                 predictor.prediction_names for predictor in config.enabled_predictors
                 if predictor.uses_experimental_reactivities
             ))
-            prediction_names = [*nonreactive_prediction_names, *reactive_prediction_names]
             tqdm.pandas(desc='Retrieving predictions')
             with PredictionDB(pred_db_path, 'c') as preddb:
                 preds = data.progress_apply(
@@ -218,7 +261,14 @@ def run_cli():
                     result_type='expand'
                 )
                 data = pd.merge(data,preds,how="left",left_index=True,right_index=True)
-            
+
+            if data['target_structure'].isna().all():
+                del data['target_structure']
+
+            prediction_names = [
+                name for name in [*nonreactive_prediction_names, *reactive_prediction_names, 'target_structure'] if name in data.columns
+            ]
+
             def getECSperRow(row):
                 df = row[prediction_names].apply(
                     scoring.calculateEternaClassicScore,
@@ -255,6 +305,9 @@ def run_cli():
             oks = data.progress_apply(getOKSperRow,axis=1)
             data = pd.merge(data,oks,how="left",left_index=True,right_index=True)
 
+            data = data.rename(columns={c: c+'_PRED' for c in prediction_names})
+
+            print('Writing output files...')
             for output in config.output_configs:
                 output.write(data, config)
 

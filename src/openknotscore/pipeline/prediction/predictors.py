@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import traceback
 import os
 import subprocess
 import re
@@ -12,8 +13,10 @@ except Exception as e:
     # Arnie unfortunately raises an exception on import if no predictors are configured
     # If the user isn't using arnie, we don't want to error, so we'll defer raising an error
     # to when attempting to use these methods
+    arnie_import_exc = traceback.format_exc()
     def arnie_load_failed(*args, **kwargs):
-        raise e
+        print(arnie_import_exc)
+        raise Exception('Arnie import failed - see previous log')
     mfe = bpps = pk_predict = pk_predict_from_bpp = arnie_load_failed
 from ...substation.scheduler.domain import UtilizedResources
 
@@ -73,7 +76,7 @@ class ArnieMfeShapePredictor(ArnieMfePredictor):
     def run(self, seq: str, reactivities: list[float]):
         # arnie expects a list of float values; we need to account for the leader region with invalid data,
         # so we don't provide the reactivity data directly stored in the row
-        processed_reactivities = [value if value is not None else 0 for value in reactivities]
+        processed_reactivities = [value if value is not None else -1 for value in reactivities]
         return {
             self.name: mfe(seq, self.package_name, shape_signal=processed_reactivities, **self.arnie_kwargs)
         }
@@ -103,7 +106,7 @@ class ArniePkFromBppPredictor(Predictor):
         self.arnie_bpp_kwargs = arnie_bpp_kwargs or {}
         self.heuristics = []
 
-    def add_heuristic(self, heuristic, as_name: str, arnie_heuristic_kwargs: dict = None):
+    def add_heuristic(self, heuristic: str, as_name: str, arnie_heuristic_kwargs: dict = None):
         self.prediction_names.append(as_name)
         self.heuristics.append({
             'heuristic': heuristic,
@@ -131,11 +134,11 @@ class Vienna2Predictor(ArnieMfePredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(9.363249628553956e-06*x**2),
-            math.ceil(6.435575569102438e-06*x**2),
-            math.ceil(1.999630031075256e-07*x**2 + 1.291168337955278e-09*x**3),
+            math.ceil(0.014957053719891054*x + 6.521510893351619e-06*x**2),
+            math.ceil(7.58615971706658e-06*x**2),
+            math.ceil(4.175814836611823e-06*x**2),
             1,
-            math.ceil(74529341.14143184 + 50039.5689844508*x),
+            math.ceil(66661373.15594226 + 66884.62043469177*x),
             0
         )
 
@@ -151,11 +154,11 @@ class Contrafold2Predictor(ArnieMfePredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(1.3555230088408226e-05*x**2),
+            math.ceil(1.8780177003189198e-05*x**2),
             math.ceil(0.0017168568837895044*x + 1.370608509360984e-06*x**2 + 2.5353069010588043e-09*x**3 + 1.755250407902063e-12*x**4),
             math.ceil(3.0220495032131762e-09*x**3),
             1,
-            math.ceil(67375207.71532412*x + 85637.61691465044*x),
+            math.ceil(47978433.97009161 + 124761.82510964583*x),
             0
         )
 
@@ -166,11 +169,11 @@ class EternafoldPredictor(ArnieMfePredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(1.3091725201772042e-05*x**2),
-            math.ceil(0.0016406025265967043*x + 1.3297639187003973e-06*x**2 + 2.614209212056624e-09*x**3 + 1.6809009331685289e-12*x**4),
+            math.ceil(0.9864763603353837 + 0.0008267324709392259*x + 8.336229748461046e-09*x**3),
+            math.ceil(6.818589190331236e-09*x**3),
             math.ceil(3.0170732966282613e-09*x**3),
             1,
-            math.ceil(67076985.533487394 + 85679.15721484796*x),
+            math.ceil(47334809.015045516 + 124729.33100925815*x),
             0
         )
 
@@ -181,11 +184,11 @@ class RnastructurePredictor(ArnieMfePredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(6.115858668137446e-05*x**2),
-            math.ceil(3.831539039645807e-05*x**2),
-            math.ceil(5.4581028524413525e-06*x**2),
+            math.ceil(7.65439536672311e-05*x**2),
+            math.ceil(5.060174568471981e-05*x**2),
+            math.ceil(8.140817736321833e-06*x**2),
             1,
-            math.ceil(148235610.48851812 + 27.12283679855023*x**2),
+            math.ceil(164598480.16611868 + 39774.67228873097*x),
             0
         )
 
@@ -211,11 +214,11 @@ class HotknotsPredictor(ArniePkPredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(1.034993732123478e-05*x**2 + 9.25764975270185e-06*x**3),
-            math.ceil(3.854509815534424e-06*x**3),
+            math.ceil(1.7166548614537612e-07*x**4),
+            math.ceil(5.5522318537226254e-08*x**4),
             math.ceil(0.0015334729937377905*x),
             1,
-            math.ceil(98192274.35077795 + 155706.9184299503*x),
+            math.ceil(128977478.30623925 + 7.906412107091359e-05*x**5 + 9.210784821427999e-07*x**6),
             0
         )
 
@@ -241,9 +244,9 @@ class KnottyPredictor(ArniePkPredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(8.749532960152117e-07*x**4),
-            math.ceil(3.8617693999595035e-05*x**3),
-            math.ceil(1.0145749847475423e-05*x**3),
+            math.ceil(5.395909039368899e-07*x**4 + 1.2305318696389623e-09*x**5),
+            math.ceil(4.6035433980017475e-07*x**4),
+            math.ceil(1.6018657621263243e-05*x**3),
             1,
             math.ceil(102096593.10636786 + 160.85474224552664*x**3),
             0
@@ -256,17 +259,20 @@ class PknotsPredictor(ArniePkPredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(0.48383213130062275 + 6.676609386480957e-12*x**7),
-            math.ceil(0.006871826653624754*x + 3.490906504167486e-10*x**6),
-            math.ceil(0.007986320659648508*x + 2.9283003948705727e-10*x**6),
+            math.ceil(5.099368419606039e-10*x**6),
+            math.ceil(3.4876825795207265e-08*x**5),
+            math.ceil(3.046780806734162e-08*x**5),
             1,
-            math.ceil(172387174.34916383 + 70428.26919995953*x + 1273.275311583844*x**2 + 18.769368117673764*x**3 + 0.24193155373736816*x**4),
+            math.ceil(186226181.74814296 + 125212.93991127468*x + 1765.802047784336*x**2 + 20.147797467970936*x**3 + 0.20690040456199893*x**4),
             0
         )
 
 class SpotrnaPredictor(ArniePkPredictor):
     def __init__(self, as_name: str, arnie_kwargs: dict = None):
-        super().__init__('spotrna', as_name, arnie_kwargs)
+        super().__init__('spotrna', as_name, {
+            'cpu': 1,
+            **(arnie_kwargs or {})
+        })
 
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
@@ -275,7 +281,7 @@ class SpotrnaPredictor(ArniePkPredictor):
             math.ceil(16.18377656041205 + 0.26514851833432623*x),
             math.ceil(25.74060961972136 + 0.024162637794247366*x + 0.0009185725454450153*x**2),
             1,
-            math.ceil(1038528677.5501341 + 3053988.952766466*x),
+            math.ceil(897227420.570466 + 4541843.719817102*x),
             0
         )
 
@@ -301,11 +307,11 @@ class NupackPkPredictor(ArniePkPredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(5.065959329800869e-05*x**3),
-            math.ceil(1.798339809862075e-05*x**3),
-            math.ceil(5.6110885356256905e-06*x**3),
+            math.ceil(6.356188679435512e-07*x**4),
+            math.ceil(2.5782818357674076e-07*x**4),
+            math.ceil(6.365939349049284e-08*x**4),
             1,
-            math.ceil(26467653.162968375 + 616.2855681555868*x**3),
+            math.ceil(4885744.735577856 + 710.1559426966696*x**3),
             0
         )
 
@@ -316,8 +322,8 @@ class RnastructureShapePredictor(ArnieMfeShapePredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(6.21061110521885e-05*x**2),
-            math.ceil(3.8566207125151296e-05*x**2),
+            math.ceil(7.199883536370171e-05*x**2),
+            math.ceil(4.468416499075908e-05*x**2),
             math.ceil(5.432031322291636e-06*x**2),
             1,
             math.ceil(155283629.4425676 + 36837.490900609955*x),
@@ -334,9 +340,9 @@ class ShapeknotsPredictor(ArnieMfeShapePredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(0.0012417930499900851*x**2),
-            math.ceil(0.0006240957445198866*x**2),
-            math.ceil(2.4251054138648075e-05*x**2),
+            math.ceil(0.0015564560910918425*x**2),
+            math.ceil(0.0007664366687325299*x**2),
+            math.ceil(2.6665578065750506e-05*x**2),
             1,
             math.ceil(145713272.2629301 + 162574.74522094347*x),
             0
@@ -349,11 +355,11 @@ class Vienna2PkFromBppPredictor(ArniePkFromBppPredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(1.7113306135215377e-05*x**2),
-            math.ceil(1.3683964534960524e-05*x**2),
-            math.ceil(6.232218465095017e-06*x**2),
+            math.ceil(1.8881274197809997e-05*x**2),
+            math.ceil(1.562624224698903e-05*x**2),
+            math.ceil(7.511396016129651e-06*x**2),
             1,
-            math.ceil(67578509.42869748 + 81169.52123215972*x),
+            math.ceil(57383436.87088825 + 102710.05819533014*x),
             0
         )
 
@@ -364,11 +370,11 @@ class EternafoldPkFromBppPredictor(ArniePkFromBppPredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(2.051440636442e-05*x**2),
-            math.ceil(1.4867130298397484e-05*x**2),
+            math.ceil(2.441166592660425e-05*x**2),
+            math.ceil(1.8235190367825772e-05*x**2),
             math.ceil(7.190588857495217e-06*x**2),
             1,
-            math.ceil(71155137.5299398 + 85096.09312683524*x),
+            math.ceil(59833068.17404543 + 115205.90242765758*x),
             0
         )
 
@@ -384,18 +390,17 @@ class Contrafold2PkFromBppPredictor(ArniePkFromBppPredictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            math.ceil(2.0519892402473385e-05*x**2),
-            math.ceil(1.4987091803218787e-05*x**2),
-            math.ceil(7.2597793931347964e-06*x**2),
+            math.ceil(2.492714280992482e-05*x**2),
+            math.ceil(1.8750758063515493e-05*x**2),
+            math.ceil(9.628448940650172e-06*x**2),
             1,
-            math.ceil(71373510.4481341 + 84211.14104063316*x),
+            math.ceil(59197725.99610226 + 116193.13486723782*x),
             0
         )
 
 # TODO: Move into Arnie
 class ShapifyHfoldPredictor(Predictor):
     uses_experimental_reactivities = False
-    name = ''
 
     def __init__(self, as_name: str, hfold_location: str = None):
         self.name = as_name
@@ -407,7 +412,10 @@ class ShapifyHfoldPredictor(Predictor):
 
         # Pull structure out of Shapify output
         match = re.search(r"Result_0: (.*) \n", hfold_return.stdout)
-        structure = match.group(1) if match else "ERR"
+        if match:
+            structure = match.group(1)
+        else:
+            raise Exception(f'Could not get result from hfold output (stdout: {hfold_return.stdout}, stderr: {hfold_return.stderr})')
         
         # Sanitize dbn structure to match our conventions 
         return {
@@ -428,3 +436,95 @@ class ShapifyHfoldPredictor(Predictor):
     @property
     def prediction_names(self):
         return [self.name]
+
+class RibonanzaNetSSPredictor(Predictor):
+    uses_experimental_reactivities=False
+    gpu=True
+
+    def __init__(self, as_name: str, env_location: str = None):
+        self.name = as_name
+        self.env_location = env_location
+
+    def run(self, seq: str, reactivities: list[float]):
+        env_location = self.env_location or os.environ['RIBONANZANET_ENV_PATH']
+        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../lib/inference-2d.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+
+        match = re.search(r"structure:(.*)\n", rnet_return.stdout)
+        if match:
+            structure = match.group(1)
+        else:
+            raise Exception(f'Could not get result from rnet output (stdout: {rnet_return.stdout}, stderr: {rnet_return.stderr})')
+        
+        return {
+            self.name: structure
+        }
+
+    def approximate_resources(self, seq: str) -> UtilizedResources:
+        x = len(seq)
+        return UtilizedResources(
+            9.93630267074983 + 0.009064971919693571*x,
+            5.328553048504195 + 0.0034631731109770417*x,
+            4.204866530717558 + 0.0022178808249596503*x,
+            1,
+            1332768293.9422886*x**0 + 142549.5294871579*x**1,
+            1521260659.6040597 + 66443.01382998787*x + 8378.075744909687*x**2
+        )
+
+    @property
+    def prediction_names(self):
+        return [self.name]
+
+class RibonanzaNetShapeDerivedPredictor(Predictor):
+    uses_experimental_reactivities=False
+    gpu=True
+
+    def __init__(self, env_location: str = None):
+        self.env_location = env_location
+        self.configurations = []
+
+    def add_configuration(self, reactivity_type: str, derivation_package: str, as_name: str):
+        self.configurations.append({
+            'reactivity_type': reactivity_type,
+            'derivation_package': derivation_package,
+            'name': as_name
+        })
+        return self
+
+    def run(self, seq: str, reactivities: list[float]):
+        env_location = self.env_location or os.environ['RIBONANZANET_ENV_PATH']
+        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../lib/inference-shape.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+
+        match = re.search(r"2a3:(.*)\ndms:(.*)\n", rnet_return.stdout)
+        if match:
+            reactivity_2a3 = [float(x) for x in match.group(1).split(',')]
+            reactivity_dms = [float(x) for x in match.group(2).split(',')]
+        else:
+            raise Exception(f'Could not get result from rnet output (stdout: {rnet_return.stdout}, stderr: {rnet_return.stderr})')
+        
+        return {
+            conf['name']: mfe(
+                seq,
+                'rnastructure',
+                shape_signal=reactivity_2a3 if conf['reactivity_type'] == '2a3' else reactivity_dms,
+                pseudo=conf['derivation_package'] == 'shapeknots'
+            )
+            for conf in self.configurations
+        }
+
+    def approximate_resources(self, seq: str) -> UtilizedResources:
+        x = len(seq)
+        return UtilizedResources(
+            0.0017890144980402386*x**2,
+            0.0010536675291728619*x**2,
+            2.686718054064782 + 0.007261345887062982*x + 3.156924098456259e-05*x**2,
+            1,
+            # Note that the sampling didn't include this second term - I lifted it from shapeknots.
+            # presumably the allocations from rnet itself wound up dwarfing it? I've included the length
+            # dependent term myself as a safety measure
+            1064575385.5 + 162574.74522094347*x,
+            1517377492.8717134 + 8709.613988478806*x**2
+        )
+
+    @property
+    def prediction_names(self):
+        return [conf['name'] for conf in self.configurations]

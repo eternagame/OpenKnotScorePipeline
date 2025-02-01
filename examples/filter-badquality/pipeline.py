@@ -9,7 +9,7 @@ class Config(OKSPConfig):
     
     source_files = path.join(path.dirname(__file__), 'source_rdats/*')
 
-    def filter_for_computation(df: pd.DataFrame) -> pd.DataFrame:
+    def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         return df.loc[df['warning'] != 'badQuality']
 
     output_configs = [

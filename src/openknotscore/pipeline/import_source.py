@@ -1,9 +1,12 @@
+from typing import TypedDict, Any
 import glob
 import itertools
 import pandas as pd
 import rdat_kit
 
-def load_sources(source_globs: str | list[str]) -> pd.DataFrame:
+SourceDef = str | TypedDict('SourceDef', {'path': str, 'extensions': dict[str, Any]})
+
+def load_sources(source_defs: SourceDef | list[SourceDef]) -> pd.DataFrame:
     '''
     Reads source files into a single dataframe
 
@@ -11,22 +14,56 @@ def load_sources(source_globs: str | list[str]) -> pd.DataFrame:
     (csv, parquet, pickle, etc) in the future
     '''
 
+    source_defs = source_defs if type(source_defs) == list else [source_defs]
+    source_defs = [source if type(source) == dict else {'path': source, 'extensions': {}} for source in source_defs]
+
+    dfs = []
+    for source in source_defs:
+        for source_file in glob.glob(source['path']):
+            if not source_file.lower().endswith('rdat'):
+                raise ValueError(f'Invalid file extension for source file {source} - only rdat is supported')
+            df = load_rdat(source_file)
+            for (k, v) in source['extensions'].items():
+                df[k] = v
+            dfs.append(df)
+    return pd.concat(dfs, ignore_index=True)
+
+def load_extension_sources(source_globs: str | list[str], df: pd.DataFrame) -> pd.DataFrame:
+    '''
+    Reads source files and merges into an existing dataframe
+    '''
+
     _source_globs = [source_globs] if type(source_globs) == str else source_globs
     source_files = list(itertools.chain.from_iterable(glob.glob(source) for source in _source_globs))
 
     for source in source_files:
-        if not source.lower().endswith('rdat'):
-            raise ValueError(f'Invalid file extension for source file {source} - only rdat is supported')
-    
-    dfs = []
+        if not source.lower().endswith('csv'):
+            raise ValueError(f'Invalid file extension for source file {source} - only csv is supported')
+
     for source in source_files:
-        dfs.append(load_rdat(source))
-    return pd.concat(dfs, ignore_index=True)
+        extension = load_csv(source)
+        df.update(
+            df[['eterna_id']].merge(extension, on=['eterna_id'], how='left')
+        )
+    
+    return df
 
 def load_rdat(source_file: str):
     rdat = rdat_kit.RDATFile()
     with open(source_file, 'r') as f:
         rdat.load(f)
+
+    modifier = rdat.annotations.get('modifier')
+    if modifier:
+        if len(modifier) > 1:
+            raise Exception('RDAT contained multiple modifier annotations - if this was expected, we need to change our input and output handling to accomodate')
+        modifier = modifier[0]
+    chemical = rdat.annotations.get('chemical')
+    temperature = rdat.annotations.get('temperature')
+    if temperature:
+        if len(temperature) > 1:
+            raise Exception('RDAT contained multiple temperature annotations - if this was expected, we need to change our input and output handling to accomodate')
+    temperature = temperature[0]
 
     for construct in rdat.constructs.values():
         seqList = []
@@ -63,6 +100,21 @@ def load_rdat(source_file: str):
                 score_start_idx = BLANK_OUT5 + 1
             if score_end_idx is None:
                 score_end_idx = len(seq) - BLANK_OUT3
+            structure = None
+            if 'structure' in sequence.annotations:
+                structure = sequence.annotations.get('structure')[0] or None
+
+            if structure != None:
+                if len(structure) != len(seq):
+                    print('Invalid target structure - length mismatch', structure)
+                    structure = None
+                else:
+                    try:
+                        from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
+                        convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True), len(structure))
+                    except Exception as e:
+                        print(f'Invalid target structure ({e}): {structure}')
+                        structure = None
 
             # Get reactivity data and errors
             reactivity = [None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3
@@ -79,6 +131,10 @@ def load_rdat(source_file: str):
                 'warning': warning,
                 'reactivity': reactivity,
                 'errors': errors,
+                'modifier': modifier,
+                'checmical': chemical,
+                'temperature': temperature,
+                'target_structure': structure,
                 'score_start_idx': score_start_idx,
                 'score_end_idx': score_end_idx,
             }
@@ -102,3 +158,10 @@ def get_global_blank_out(construct):
     BLANK_OUT3 = len(construct.sequence) - (construct.seqpos[-1] - construct.offset)
 
     return (BLANK_OUT5, BLANK_OUT3)
+
+def load_csv(source_file: str):
+    df = pd.read_csv(source_file)
+    df = df[[col for col in df.columns if col in ['eterna_id', 'score_start_idx', 'score_end_idx']]]
+    df['eterna_id'] = df['eterna_id'].astype(str)
+
+    return df

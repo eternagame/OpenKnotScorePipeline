@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Callable
 from abc import ABC, abstractmethod
 import itertools
 import glob
@@ -9,7 +9,7 @@ import math
 import pandas as pd
 import rdat_kit
 from .pipeline.prediction import predictors
-from .pipeline.import_source import get_global_blank_out
+from .pipeline.import_source import get_global_blank_out, SourceDef
 from .substation.runners.runner import Runner
 from .substation.runners.local import LocalRunner
 
@@ -34,7 +34,7 @@ class RDATOutput(OutputConfig):
             if not source.lower().endswith('rdat'):
                 raise ValueError(f'Cant write rdat for {source} - input needs to be rdat')
 
-        for source in source_files:    
+        for source in source_files:
             rdat = rdat_kit.RDATFile()
             with open(source, 'r') as f:
                 rdat.load(f)
@@ -43,18 +43,45 @@ class RDATOutput(OutputConfig):
                     BLANK_OUT5, BLANK_OUT3 = get_global_blank_out(construct)
 
                     seq = sequence.annotations["sequence"][0]
-                    annotationList = sequence.annotations.setdefault('Eterna', [])
+                    annotationList = [
+                        annot for annot in sequence.annotations.get('Eterna', [])
+                        if not annot.startswith((
+                            'score:openknot_score',
+                            'score:eterna_classic_score',
+                            'score:crossed_pair_score'
+                            'score:crossed_pair_quality_score',
+                            'score:ensemble_openknot_score:',
+                            'score:ensemble_eterna_classic_score:',
+                            'score:ensemble_crossed_pair_score:',
+                            'score:ensemble_crossed_pair_quality_score:',
+                            'score:target_openknot_score:',
+                            'score:target_eterna_classic_score:',
+                            'score:target_crossed_pair_score:',
+                            'score:target_crossed_pair_quality_score:',
+                            'score:best_cc',
+                            'best_fit:tags',
+                            'best_fit:structures',
+                            'best_fit:eterna_classic_scores',
+                        ))
+                    ]
+                    sequence.annotations['Eterna'] = annotationList
                     
                     # There may be no processed data (OKS, predictions) associated with the sequence
                     # if the sequence had low-quality or missing reactivity data, so we skip those rows
-                    row = df.loc[(df['sequence'] == seq) & (df['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3))].squeeze()
+                    row = df[df['sequence'] == seq]
+                    row = row[row['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3)]
+                    row = row.squeeze()
                     if row.empty:
                         continue
 
                     # Add annotations with the processed data to the RDAT
-                    annotationList.append(f"score:openknot_score:{row['ensemble_OKS']:.6f}")
-                    annotationList.append(f"score:eterna_classic_score:{row['ensemble_ECS']:.6f}")
-                    annotationList.append(f"score:crossed_pair_quality_score:{row['ensemble_CPQ']:.6f}")
+                    annotationList.append(f"score:ensemble_openknot_score:{row['ensemble_OKS']:.6f}")
+                    annotationList.append(f"score:ensemble_eterna_classic_score:{row['ensemble_ECS']:.6f}")
+                    annotationList.append(f"score:ensemble_crossed_pair_quality_score:{row['ensemble_CPQ']:.6f}")
+                    if row.get('target_structure_PRED') is not None:
+                        annotationList.append(f"score:target_openknot_score:{row['target_structure_OKS']:.6f}")
+                        annotationList.append(f"score:target_eterna_classic_score:{row['target_structure_ECS']:.6f}")
+                        annotationList.append(f"score:target_crossed_pair_quality_score:{row['target_structure_CPQ'][1]:.6f}")
                     annotationList.append(f"best_fit:tags:{','.join(row['ensemble_tags'])}")
                     annotationList.append(f"best_fit:structures:{','.join(row['ensemble_structures'])}")
                     annotationList.append(f"best_fit:eterna_classic_scores:{','.join([f'{v:.6f}' for v in row['ensemble_structures_ecs']])}")
@@ -95,7 +122,7 @@ class CSVOutput(OutputConfig):
 
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
         os.makedirs(path.dirname(self.output_path), exist_ok=True)
-        df.to_csv(self.output_path, sep=self.sep, compression=self.compression)
+        df.to_csv(self.output_path, sep=self.sep, compression=self.compression, index=False)
 
 class ParquetOutput(OutputConfig):
     def __init__(self, output_path: str, compression: Literal['snappy', 'gzip', 'brotli', 'lz4', 'zstd'] | None = None):
@@ -106,7 +133,22 @@ class ParquetOutput(OutputConfig):
         os.makedirs(path.dirname(self.output_path), exist_ok=True)
         df.to_parquet(self.output_path, compression=self.compression)
 
+class OutputFilter(OutputConfig):
+    def __init__(self, filter: Callable[[pd.DataFrame], pd.DataFrame], outputs: list[OutputConfig]):
+        self.filter = filter
+        self.outputs = outputs
+
+    def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
+        filtered = self.filter(df)
+        for out in self.outputs:
+            out.write(filtered, config)
+
 class OKSPConfig(ABC):
+    name: str | None = None
+    '''
+    Identifier for this project eg to be used in compute job names
+    '''
+    
     @property
     @abstractmethod
     def db_path() -> str | list[str]:
@@ -117,14 +159,23 @@ class OKSPConfig(ABC):
 
     @property
     @abstractmethod
-    def source_files() -> str | list[str]:
+    def source_files() -> SourceDef | list[SourceDef]:
         '''
         A single or list of file paths or globs that should be loaded as input data to the pipeline
+        Instead of just a path/glob you can also provide a dict containing additional values to be
+        attached to each row
         '''
         pass
 
+    extension_source_files: str | list[str] = []
+    '''
+    A single or list of file paths or globs that should be loaded as input data to the pipeline not as
+    individual solutions to be run through the pipeline, but additional data to extend data loaded from
+    source_files. Namely, columns will be merged with eterna_id being the joining column
+    '''
+
     @staticmethod
-    def filter_for_computation(df: pd.DataFrame) -> pd.DataFrame:
+    def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         '''
         If you don't want to run computations for all data in source_files, use this function to
         filter down to just the rows you want to compute for
@@ -135,6 +186,8 @@ class OKSPConfig(ABC):
     @abstractmethod
     def output_configs() -> list[OutputConfig]:
         pass
+
+    imported_column_map: dict[str, str] = {}
     
     enabled_predictors: list[predictors.Predictor] = [
         predictors.Vienna2Predictor(as_name='vienna2'),
@@ -155,14 +208,20 @@ class OKSPConfig(ABC):
         predictors.RnastructureShapePredictor(as_name='rnastructure+SHAPE'),
         predictors.ShapeknotsPredictor(as_name='shapeknots'),
         predictors.Vienna2PkFromBppPredictor()
-            .add_heuristic('threshknot', as_name='vienna_2.TK')
-            .add_heuristic('hungarian', as_name='vienna_2.HN'),
+            .add_heuristic('threshknot', as_name='vienna2.TK')
+            .add_heuristic('hungarian', as_name='vienna2.HN'),
         predictors.EternafoldPkFromBppPredictor()
             .add_heuristic('threshknot', as_name='eternafold.TK')
             .add_heuristic('hungarian', as_name='eternafold.HN'),
         predictors.Contrafold2PkFromBppPredictor()
-            .add_heuristic('threshknot', as_name='contrafold_2.TK')
-            .add_heuristic('hungarian', as_name='contrafold_2.HN')
+            .add_heuristic('threshknot', as_name='contrafold2.TK')
+            .add_heuristic('hungarian', as_name='contrafold2.HN'),
+        predictors.RibonanzaNetSSPredictor('ribonanzanet-ss'),
+        predictors.RibonanzaNetShapeDerivedPredictor()
+            .add_configuration('2a3', 'rnastructure', as_name='rnet-2a3-rnastructure')
+            .add_configuration('dms', 'rnastructure', as_name='rnet-dms-rnastructure')
+            .add_configuration('2a3', 'shapeknots', as_name='rnet-2a3-shapeknots')
+            .add_configuration('dms', 'shapeknots', as_name='rnet-dms-shapeknots')
     ]
 
     runner: Runner = LocalRunner()

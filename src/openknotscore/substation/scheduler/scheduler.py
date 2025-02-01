@@ -91,7 +91,7 @@ def recover_resources(resource_request: UtilizedResources, queue: TaskQueue):
         candidate_queue = candidate_queue.parent_queue
     available_resources.cpus += queue.allocation.configuration.cpus - queue.allocation.utilized_resources.cpus
     available_resources.memory += queue.allocation.configuration.memory - queue.allocation.utilized_resources.memory
-    if queue.gpu_id:
+    if queue.gpu_id is not None:
         available_resources.gpu_memory += queue.allocation.configuration.gpu_memory - queue.allocation.utilized_resources.gpu_memory[queue.gpu_id]
 
     if (
@@ -160,7 +160,9 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
     # 20% of the allocation's resources for its entire available timeout
     while (
         allocation.configuration.cpus - allocation.utilized_resources.cpus >= resource_request.cpus
-        and allocation.configuration.gpu_memory - min(allocation.utilized_resources.gpu_memory + [0]) >= resource_request.gpu_memory
+        and allocation.configuration.gpu_memory - (
+            min(allocation.utilized_resources.gpu_memory) if len(allocation.utilized_resources.gpu_memory) else 0
+        ) >= resource_request.gpu_memory
         and allocation.configuration.memory - allocation.utilized_resources.memory >= resource_request.memory
     ):
         queue = TaskQueue(
@@ -172,7 +174,7 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
         queue.utilized_resources.memory = resource_request.memory
         allocation.queues.append(queue)
         allocation.utilized_resources.cpus += resource_request.cpus
-        if queue.gpu_id: allocation.utilized_resources.gpu_memory[queue.gpu_id] += resource_request.gpu_memory
+        if queue.gpu_id is not None: allocation.utilized_resources.gpu_memory[queue.gpu_id] += resource_request.gpu_memory
         allocation.utilized_resources.memory += resource_request.memory
         schedule.task_queues.append(queue)
         yield queue
