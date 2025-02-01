@@ -186,7 +186,7 @@ class OKSPConfig(ABC):
     gpu_memory_buffer = 1.15
     '''
     When calculating the expected GPU memory needed to run tasks, use this multiplier to add
-    some additional buffer to ac
+    some additional buffer to account for underestimates or variation
     '''
 
     filter_singlets = False

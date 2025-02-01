@@ -6,6 +6,9 @@ import rdat_kit
 def load_sources(source_globs: str | list[str]) -> pd.DataFrame:
     '''
     Reads source files into a single dataframe
+
+    Right now we only support rdat, but we can expand to support other file types
+    (csv, parquet, pickle, etc) in the future
     '''
 
     _source_globs = [source_globs] if type(source_globs) == str else source_globs
@@ -80,12 +83,17 @@ def load_rdat(source_file: str):
                 'score_end_idx': score_end_idx,
             }
 
-            # Add the row to the whole dataframe
             seqList.append(row)
 
     return pd.DataFrame(seqList)
 
 def get_global_blank_out(construct):
+    '''
+    Determines the number of bases on either end of the sequence which have no reactivity/error values
+    defined (ie, to make the length of the values and errors arrays from the RDATFile match the length
+    of the sequence, you need to pad on the left with BLANK_OUT5 nan values and the right with BLANK_OUT3 nan values)
+    '''
+
     assert construct.seqpos == list(range(construct.seqpos[0], construct.seqpos[-1] + 1)), 'RDAT reactivity indicies (SEQPOS) are not contiguous'
     seqlens = [len(seq.annotations['sequence']) for seq in construct.data]
     assert all(seqlen == seqlens[0] for seqlen in seqlens), 'Not all sequences are the same length'
