@@ -447,7 +447,7 @@ class RibonanzaNetSSPredictor(Predictor):
 
     def run(self, seq: str, reactivities: list[float]):
         env_location = self.env_location or os.environ['RIBONANZANET_ENV_PATH']
-        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../lib/inference-2d.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../../lib/inference-2d.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
 
         match = re.search(r"structure:(.*)\n", rnet_return.stdout)
         if match:
@@ -492,7 +492,7 @@ class RibonanzaNetShapeDerivedPredictor(Predictor):
 
     def run(self, seq: str, reactivities: list[float]):
         env_location = self.env_location or os.environ['RIBONANZANET_ENV_PATH']
-        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../lib/inference-shape.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+        rnet_return = subprocess.run([env_location+"/python", os.path.join(os.path.dirname(__file__), '../../../../lib/inference-shape.py'), seq.strip()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
 
         match = re.search(r"2a3:(.*)\ndms:(.*)\n", rnet_return.stdout)
         if match:
