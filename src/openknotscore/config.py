@@ -26,9 +26,10 @@ class RDATOutput(OutputConfig):
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
         os.makedirs(self.output_dir, exist_ok=True)
 
-        source_globs = config.source_files
-        _source_globs = [source_globs] if type(source_globs) == str else source_globs
-        source_files = list(itertools.chain.from_iterable(glob.glob(source) for source in _source_globs))
+        source_defs = config.source_files
+        source_defs = source_defs if type(source_defs) == list else [source_defs]
+        source_defs = [source if type(source) == dict else {'path': source, 'extensions': {}} for source in source_defs]
+        source_files = list(itertools.chain.from_iterable(glob.glob(source['path']) for source in source_defs))
 
         for source in source_files:
             if not source.lower().endswith('rdat'):
