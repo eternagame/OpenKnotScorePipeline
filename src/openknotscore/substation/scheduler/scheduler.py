@@ -50,19 +50,25 @@ def prioritize(a: UtilizedResources, b: UtilizedResources):
     
     return 0
 
-def get_new_allocation(resource_request: UtilizedResources, schedule: Schedule):
-    for config in schedule.compute_configurations:
+def get_priority_allocation_idx(resource_request: UtilizedResources, schedule: Schedule):
+    for idx, config in enumerate(schedule.compute_configurations):
         if (
             config.cpus >= resource_request.cpus
             and config.gpu_memory >= resource_request.gpu_memory
             and config.memory >= resource_request.memory
             and config.runtime >= resource_request.max_runtime
         ):
-            alloc = ComputeAllocation(config)
-            schedule.compute_allocations.append(alloc)
-            config.allocations.append(alloc)
-            return alloc
+            return idx
+
     raise RuntimeError(f'Could not schedule task - required resources ({resource_request}) could not fit into any configuration')
+
+def get_new_allocation(resource_request: UtilizedResources, schedule: Schedule):
+    config = schedule.compute_configurations[get_priority_allocation_idx(resource_request, schedule)]
+    alloc = ComputeAllocation(config)
+    schedule.compute_allocations.append(alloc)
+    config.allocations.append(alloc)
+    return alloc
+
 
 def get_gpu_slot(allocation: ComputeAllocation):
     # We choose the GPU with the lowest utilization because that gives us the best likihood
@@ -141,7 +147,12 @@ def recover_resources(resource_request: UtilizedResources, queue: TaskQueue):
     
     return True
 
-def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAllocation, schedule: Schedule):
+def slots_for_task(
+    resource_request: UtilizedResources,
+    allocation: ComputeAllocation,
+    schedule: Schedule,
+    dont_extend_runtime: bool
+):
     # If there is room for a new queue to fit this task, create it. We want to prefer
     # filling up more of the allocation resources rather than extending the runtime,
     # as we can relinquish an allocation early but not shrink its resources.
@@ -194,7 +205,12 @@ def slots_for_task(resource_request: UtilizedResources, allocation: ComputeAlloc
             leaf_queues.sort(key=lambda queue: queue.chain_utilized_resources.avg_runtime)
         
         queue = leaf_queues[0]
-        if queue.chain_utilized_resources.max_runtime + resource_request.max_runtime > allocation.configuration.runtime:
+        if (
+            queue.chain_utilized_resources.max_runtime + resource_request.max_runtime > allocation.configuration.runtime
+            or (
+                dont_extend_runtime and queue.chain_utilized_resources.avg_runtime + resource_request.avg_runtime > allocation.utilized_resources.avg_runtime
+            )
+        ):
             leaf_queues.pop(0)
             continue
 
@@ -296,7 +312,14 @@ def fill_allocation(
     schedule: Schedule
 ):
     for bucket in scheduling_priorities:
-        slots = slots_for_task(bucket, allocation, schedule)
+        # If there's an allocation which we'd prefer to use for this type of task (eg, using a cheaper CPU allocation
+        # for CPU tasks instead of a GPU allocation), only add tasks to this allocation if they wouldn't extend the runtime.
+        # We want to make sure the resources we have allocated are being fully used, but we don't want to be requesting more
+        # of this less-preferred allocation than we need!
+        # NB: This is imperfect (eg, it may be preferable to fill up a core that's empty for 10h with a 10h task if it takes 10h1s),
+        # but its much more likely for this to be the more (cost) efficient option.
+        dont_extend_runtime = get_priority_allocation_idx(bucket, schedule) < schedule.compute_configurations.index(allocation.configuration)
+        slots = slots_for_task(bucket, allocation, schedule, dont_extend_runtime)
         tasks = task_buckets[bucket]
         while tasks and (queue := next(slots, None)):
             schedule_task(tasks.pop(), queue)
