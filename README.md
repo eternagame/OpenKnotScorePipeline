@@ -10,7 +10,7 @@ for packages supported via arnie, and for other packages:
 * Set the `RIBONANZANET_PATH` environment variable to the directory with the RibonanzaNet source code
 * Set the `RIBONANZANET_WEIGHTS` environment variable to the directory with the RibonanzaNet pretrained weights
 * Set the `RIBONANZANET_ENV_PATH` environment variable to the bin directory for the virtual environment
-  (or conda/mabma environment) for RibonanzaNet
+  (or conda/mabma environment) for RibonanzaNet (`arnie` should also be installed into this environment)
 
 Also, set `CONTRAFOLD_2_PARAMS_PATH` to the location of the contrafold 2 parameter file (we run Eternafold
 instead of contrafold in order to use the latest fixes eg avoiding <3 nt loops, but with contrafold parameters)
