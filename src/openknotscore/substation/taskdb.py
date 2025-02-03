@@ -136,18 +136,19 @@ class TaskDB:
             ''',
             ((task.id, task.queue.id, hash_cache[id(task.runnable.func)]) for task in schedule.tasks)
         ).close()
-        self._cx.executemany(
-            '''
-            INSERT INTO queues VALUES(?, ?, ?, ?, ?, ?, ?)
-            ''',
-            itertools.chain.from_iterable(
-                (
-                    (queue.id, alloc.configuration.id, allocidx, queue.utilized_resources.cpus, queue.utilized_resources.memory, queue.gpu_id, queue.parent_queue.id if queue.parent_queue else None)
-                    for queue in alloc.nonempty_queues()
+        for comp_config in schedule.nonempty_compute_configurations():
+            self._cx.executemany(
+                '''
+                INSERT INTO queues VALUES(?, ?, ?, ?, ?, ?, ?)
+                ''',
+                itertools.chain.from_iterable(
+                    (
+                        (queue.id, alloc.configuration.id, allocidx, queue.utilized_resources.cpus, queue.utilized_resources.memory, queue.gpu_id, queue.parent_queue.id if queue.parent_queue else None)
+                        for queue in alloc.nonempty_queues()
+                    )
+                    for (allocidx, alloc) in enumerate(comp_config.nonempty_allocations())
                 )
-                for (allocidx, alloc) in enumerate(schedule.nonempty_compute_allocations())
-            )
-        ).close()
+            ).close()
 
     def tasks_for_queue(self, id: int):
         with closing(self._cx.execute(

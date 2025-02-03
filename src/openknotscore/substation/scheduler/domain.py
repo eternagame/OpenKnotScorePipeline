@@ -139,7 +139,7 @@ class ComputeAllocation:
     
     def nonempty(self):
         return any(
-            True for queue in self.queues if len(queue.tasks) > 0
+            len(queue.tasks) > 0 for queue in self.queues
         )
 
     def leaf_queues(self) -> list['TaskQueue']:
@@ -193,9 +193,7 @@ class ComputeConfiguration:
         return f'ComputeConfiguration/{self.id}(cpus: {self.cpus}, memory: {self.memory}, gpus: {self.gpus}, runtime: {self.runtime})'
 
     def nonempty(self):
-        return any(True for alloc in self.allocations if any(
-            True for queue in alloc.queues if len(queue.tasks) > 0
-        ))
+        return any(alloc.nonempty() for alloc in self.allocations)
 
 @dataclass
 class Schedule:
