@@ -82,9 +82,9 @@ class RDATOutput(OutputConfig):
                         annotationList.append(f"score:target_openknot_score:{row['target_structure_OKS']:.6f}")
                         annotationList.append(f"score:target_eterna_classic_score:{row['target_structure_ECS']:.6f}")
                         annotationList.append(f"score:target_crossed_pair_quality_score:{row['target_structure_CPQ'][1]:.6f}")
-                    annotationList.append(f"best_fit:tags:{','.join(row['ensemble_tags'])}")
-                    annotationList.append(f"best_fit:structures:{','.join(row['ensemble_structures'])}")
-                    annotationList.append(f"best_fit:eterna_classic_scores:{','.join([f'{v:.6f}' for v in row['ensemble_structures_ecs']])}")
+                    if row.get('ensemble_tags'): annotationList.append(f"best_fit:tags:{','.join(row['ensemble_tags'])}")
+                    if row.get('ensemble_structures'): annotationList.append(f"best_fit:structures:{','.join(row['ensemble_structures'])}")
+                    if row.get('ensemble_structures_ecs'): annotationList.append(f"best_fit:eterna_classic_scores:{','.join([f'{v:.6f}' for v in row['ensemble_structures_ecs']])}")
             
             tempout = tempfile.NamedTemporaryFile(delete=False)
             tempout.close()

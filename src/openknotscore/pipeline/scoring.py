@@ -252,6 +252,8 @@ def calculateOpenKnotScore(row, prediction_tags):
     scoring_region_length: length in nucleotides of the region that was scored
     """
 
+    if len(prediction_tags) == 0: return
+
     ecs_tags = [f"{tag}_ECS" for tag in prediction_tags]
 
     # If there's no data, skip this row
