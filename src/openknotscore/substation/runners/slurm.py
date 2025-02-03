@@ -218,18 +218,26 @@ class SlurmRunner(Runner):
     def run_serialized_allocation(dbpath: str, compute_config_id: int, allocation_id: int):
         with TaskDB(dbpath) as db:
             finished_queues = multiprocessing.Queue()
-            running_queues = 0
+            running_queues = []
             for queue in db.queues_for_allocation(compute_config_id, allocation_id):
                 print('Triggering srun for base queue', queue.id)
-                multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
-                running_queues += 1
+                p = multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
+                p.start()
+                running_queues.append({'proc': p, 'queue': queue})
             while running_queues > 0:
-                finished: DBQueue = finished_queues.get()
-                running_queues -= 1
-                for queue in db.children_for_queue(finished.id):
-                    print('Triggering srun for queue', queue.id, 'child of', finished.id)
-                    multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
-                    running_queues += 1
+                try:
+                    finished_queues.get(timeout=30)
+                except:
+                    pass
+                
+                finished = next((queue['queue'] for queue in running_queues if not queue['proc'].is_alive()), None)
+                if finished:
+                    running_queues.remove(finished)
+                    for queue in db.children_for_queue(finished.id):
+                        print('Triggering srun for queue', queue.id, 'child of', finished.id)
+                        p = multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True).start()
+                        p.start()
+                        running_queues.append({'proc': p, 'queue': queue})
 
 def srun(
     command: list[str],
