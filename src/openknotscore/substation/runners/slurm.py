@@ -224,17 +224,17 @@ class SlurmRunner(Runner):
                 p = multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True)
                 p.start()
                 running_queues.append({'proc': p, 'queue': queue})
-            while running_queues > 0:
+            while len(running_queues) > 0:
                 try:
                     finished_queues.get(timeout=30)
                 except:
                     pass
                 
-                finished = next((queue['queue'] for queue in running_queues if not queue['proc'].is_alive()), None)
+                finished = next((queue for queue in running_queues if not queue['proc'].is_alive()), None)
                 if finished:
                     running_queues.remove(finished)
-                    for queue in db.children_for_queue(finished.id):
-                        print('Triggering srun for queue', queue.id, 'child of', finished.id)
+                    for queue in db.children_for_queue(finished['queue'].id):
+                        print('Triggering srun for queue', queue.id, 'child of', finished['queue'].id)
                         p = multiprocessing.Process(target=SlurmRunner._srun_queue, args=(dbpath, queue, finished_queues), daemon=True)
                         p.start()
                         running_queues.append({'proc': p, 'queue': queue})
