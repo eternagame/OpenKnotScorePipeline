@@ -248,7 +248,7 @@ class KnottyPredictor(ArniePkPredictor):
             math.ceil(4.6035433980017475e-07*x**4),
             math.ceil(1.6018657621263243e-05*x**3),
             1,
-            math.ceil(102096593.10636786 + 160.85474224552664*x**3),
+            math.ceil(102096593.10636786 + 280.85474224552664*x**3),
             0
         )
 
@@ -311,7 +311,7 @@ class NupackPkPredictor(ArniePkPredictor):
             math.ceil(2.5782818357674076e-07*x**4),
             math.ceil(6.365939349049284e-08*x**4),
             1,
-            math.ceil(4885744.735577856 + 710.1559426966696*x**3),
+            math.ceil(4885744.735577856 + 1000.1559426966696*x**3),
             0
         )
 
@@ -462,12 +462,12 @@ class RibonanzaNetSSPredictor(Predictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            9.93630267074983 + 0.009064971919693571*x,
-            5.328553048504195 + 0.0034631731109770417*x,
-            4.204866530717558 + 0.0022178808249596503*x,
+            math.ceil(9.93630267074983 + 0.009064971919693571*x),
+            math.ceil(5.328553048504195 + 0.0034631731109770417*x),
+            math.ceil(4.204866530717558 + 0.0022178808249596503*x),
             1,
-            1332768293.9422886*x**0 + 142549.5294871579*x**1,
-            1521260659.6040597 + 66443.01382998787*x + 8378.075744909687*x**2
+            math.ceil(1332768293.9422886*x**0 + 142549.5294871579*x**1),
+            math.ceil(1521260659.6040597 + 66443.01382998787*x + 8378.075744909687*x**2)
         )
 
     @property
@@ -514,15 +514,15 @@ class RibonanzaNetShapeDerivedPredictor(Predictor):
     def approximate_resources(self, seq: str) -> UtilizedResources:
         x = len(seq)
         return UtilizedResources(
-            0.0017890144980402386*x**2,
-            0.0010536675291728619*x**2,
-            2.686718054064782 + 0.007261345887062982*x + 3.156924098456259e-05*x**2,
+            math.ceil(0.0017890144980402386*x**2),
+            math.ceil(0.0010536675291728619*x**2),
+            math.ceil(2.686718054064782 + 0.007261345887062982*x + 3.156924098456259e-05*x**2),
             1,
             # Note that the sampling didn't include this second term - I lifted it from shapeknots.
             # presumably the allocations from rnet itself wound up dwarfing it? I've included the length
             # dependent term myself as a safety measure
-            1064575385.5 + 162574.74522094347*x,
-            1517377492.8717134 + 8709.613988478806*x**2
+            math.ceil(1064575385.5 + 162574.74522094347*x),
+            math.ceil(1517377492.8717134 + 8709.613988478806*x**2)
         )
 
     @property
