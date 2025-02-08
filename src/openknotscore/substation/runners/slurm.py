@@ -14,6 +14,11 @@ from ..scheduler.scheduler import schedule_tasks
 from .runner import Runner
 from ..taskdb import TaskDB, DBQueue
 
+# We'll reserve an extra 10MB in overhead per task that isnt reserved for any queue
+# to account for the base script and rounding errors to ensure srun has enough memory
+# to allocate for all steps
+MEM_BUFFER = 10*1024**2
+
 @dataclass
 class SlurmConfig:
     partitions: str
@@ -68,7 +73,7 @@ class SlurmRunner(Runner):
             sum(
                 max(task.utilized_resources.memory for task in queue.tasks) if len(queue.tasks) > 0 else 0 for queue in alloc.queues
             ) for alloc in config.allocations
-        )
+        ) + MEM_BUFFER
 
     def config_max_runtime(self, config: ComputeConfiguration, buffer: int):
         return max(
@@ -91,7 +96,7 @@ class SlurmRunner(Runner):
             [
                 ComputeConfiguration(
                     config.max_cores,
-                    config.max_cores * config.max_mem_per_core,
+                    config.max_cores * config.max_mem_per_core - MEM_BUFFER,
                     config.max_gpus,
                     config.max_timeout - config.runtime_buffer,
                     config.gpu_memory,
@@ -110,7 +115,7 @@ class SlurmRunner(Runner):
                 break
 
             allocations = comp_config.nonempty_allocations()
-            array_size = min(len(allocations), self.max_jobs - len(allocations))
+            array_size = min(len(allocations), self.max_jobs - allocated_jobs)
             allocated_jobs += array_size
 
             max_gpus = self.config_max_gpus(comp_config)
@@ -129,11 +134,12 @@ class SlurmRunner(Runner):
                 partition=self.configs[schedule.compute_configurations.index(comp_config)].partitions,
                 cpus=self.config_max_cpus(comp_config, self.configs[schedule.compute_configurations.index(comp_config)].max_mem_per_core, with_memory_overage=False),
                 gpus=max_gpus if max_gpus > 0 else None,
-                memory_per_node=f'{math.ceil(self.config_max_memory(comp_config)/1024)}K',
+                memory_per_node=f'{self.config_max_memory(comp_config)//1024}K',
                 constraint=self.configs[schedule.compute_configurations.index(comp_config)].constraints,
                 mail_type='END',
                 array=f'0-{array_size-1}' if array_size > 1 else None,
-                echo_cmd=True
+                echo_cmd=True,
+                nodes=1,
             )
             
             if on_queue:
@@ -208,8 +214,9 @@ class SlurmRunner(Runner):
             ['/usr/bin/env', 'python', '-c', f'from openknotscore.substation.runners.runner import Runner; Runner.run_serialized_queue("{dbpath}", {queue.id})'],
             cpus=queue.cpus,
             memory_per_node=f'{math.ceil(queue.memory/1024)}K',
+            gpus=1 if queue.gpu_id != None else None,
             gpu_cmode='shared' if queue.gpu_id != None else None,
-            cuda_visible_devices=str(queue.gpu_id),
+            # cuda_visible_devices=str(queue.gpu_id),
             export='ALL'
         )
         finished_queues.put(queue)
@@ -244,6 +251,7 @@ def srun(
     cpus: int = None,
     memory_per_node: str = None,
     memory_per_cpu: str = None,
+    gpus: int = None,
     gpu_cmode: str = None,
     cuda_visible_devices: str = None,
     export: str = None
@@ -265,6 +273,9 @@ def srun(
     if memory_per_cpu is not None:
         args.append(f'--mem-per-cpu={memory_per_cpu}')
     
+    if gpus is not None:
+        args.append(f'--gpus={gpus}')
+
     if gpu_cmode is not None:
         args.append(f'--gpu_cmode={gpu_cmode}')
 
@@ -298,6 +309,7 @@ def sbatch(
     constraint: str = None,
     array: str = None,
     echo_cmd: bool = False,
+    nodes: int = None
 ):
     args = ['sbatch']
 
@@ -330,6 +342,9 @@ def sbatch(
 
     if ntasks is not None:
         args.append(f'--ntasks={ntasks}')
+
+    if nodes is not None:
+        args.append(f'--nodes={nodes}')
 
     if dependency is not None:
         args.append(f'--dependency={dependency}')
