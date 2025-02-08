@@ -3,6 +3,7 @@ import glob
 import itertools
 import pandas as pd
 import rdat_kit
+from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
 
 SourceDef = str | TypedDict('SourceDef', {'path': str, 'extensions': dict[str, Any]})
 
@@ -110,7 +111,6 @@ def load_rdat(source_file: str):
                     structure = None
                 else:
                     try:
-                        from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
                         convert_bp_list_to_dotbracket(convert_dotbracket_to_bp_list(structure, allow_pseudoknots=True), len(structure))
                     except Exception as e:
                         print(f'Invalid target structure ({e}): {structure}')
