@@ -1,4 +1,5 @@
 from typing import TypedDict, Any
+import math
 import glob
 import itertools
 import pandas as pd
@@ -117,8 +118,8 @@ def load_rdat(source_file: str):
                         structure = None
 
             # Get reactivity data and errors
-            reactivity = [None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3
-            errors = [None]*BLANK_OUT5 + sequence.errors + [None]*BLANK_OUT3
+            reactivity = [None]*BLANK_OUT5 + [val if not math.isnan(val) else None for val in sequence.values] + [None]*BLANK_OUT3
+            errors = [None]*BLANK_OUT5 + [val if not math.isnan(val) else None for val in sequence.errors] + [None]*BLANK_OUT3
 
             # Create a dataframe from this row
             row = {
