@@ -1,3 +1,4 @@
+import math
 import re
 import pandas
 import statistics
@@ -17,7 +18,11 @@ def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx,
     # make a lot of noise by printing about it
     if pandas.isna(structure):
         return
-
+    
+    # We don't have data for this solution. That's fine!
+    if data == None or all(val == None or math.isnan(val) for val in data):
+        return 
+    
     if not isinstance(structure, str):
         print(f"Structure in dbn notation expected, got: {type(structure)}")
         return
@@ -46,6 +51,9 @@ def calculateEternaClassicScore(structure, data, score_start_idx, score_end_idx,
     
     # Loop over each base we are testing for correlation 
     for i in range(len(data_scored)):
+        if (data_scored[i] == None or math.isnan(data_scored[i])):
+           continue
+        
         # If the prediction is the base is unpaired
         if (prediction_scored[i] == 1):
         # We check that the data passes a cutoff, and add it to the correct_hit list if true
@@ -125,6 +133,10 @@ def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end
     # make a lot of noise by printing about it
     if pandas.isna(structure):
         return
+
+    # We don't have data for this solution. That's fine!
+    if data == None or all(val == None or math.isnan(val) for val in data):
+        return 
     
     if not isinstance(structure, str):
         print(f"Structure in dbn notation expected, got: {type(structure)}")
@@ -170,6 +182,10 @@ def calculateCrossedPairQualityScore(structure, data, score_start_idx, score_end
         if i > score_end_idx: continue
         
         max_count = max_count + 1
+
+        if (data[i] == None or math.isnan(data[i])):
+           continue
+
         if ( data[i] < threshold_SHAPE_fixed_pair):
             if i in crossed_res_filtered:
                 num_crossed_pairs = num_crossed_pairs + 1
@@ -211,6 +227,15 @@ def calculateCorrelationCoefficient(structure, data, score_start_idx, score_end_
 #     if ~exist( 'corr_type','var') | length(corr_type)==0; corr_type = 'Pearson'; end;
 #     if ~exist( 'num_show','var') | num_show == 0; num_show = length(structure_tags); end;
 #     if ~exist( 'clip','var') | clip == 0; clip=Inf; end;
+    
+    # Failed or missing - this is not uncommmon and expected in many cases, so we won't
+    # make a lot of noise by printing about it
+    if pandas.isna(structure):
+        return
+    
+    # We don't have data for this solution. That's fine!
+    if data == None or all(val == None or math.isnan(val) for val in data):
+        return 
     
     if not isinstance(structure, str):
         print(f"Structure in dbn notation expected, got: {type(structure)}")
@@ -257,7 +282,8 @@ def calculateOpenKnotScore(row, prediction_tags):
     ecs_tags = [f"{tag}_ECS" for tag in prediction_tags]
 
     # If there's no data, skip this row
-    if not isinstance(row['reactivity'],list): return
+    if not isinstance(row['reactivity'], list) or all(val == None or math.isnan(val) for val in row['reactivity']):
+        return
     
     # Initialize a pandas series to hold the OKS scores
     df = pandas.Series(dtype='float64')
