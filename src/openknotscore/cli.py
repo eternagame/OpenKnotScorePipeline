@@ -70,12 +70,15 @@ def run_cli():
         print(f'{datetime.now()} Loading data...')
         def parse_list(val: str):
             return [None if x.strip() in ('None', 'nan', 'NaN') else float(x) for x in val.removeprefix('[').removesuffix(']').split(',')]
-        if args.file.endswith('.csv'):
+
+        if args.file.removesuffix('.gzip').endswith('.csv'):
             data = pd.read_csv(args.file, converters={'reactivity': parse_list})
-        elif args.file.endswith('.tsv'):
+        elif args.file.removesuffix('.gzip').endswith('.tsv'):
             data = pd.read_csv(args.file, sep='\t', converters={'reactivity': parse_list})
-        elif args.file.endswith('.pkl'):
+        elif args.file.removesuffix('.gzip').endswith('.pkl'):
             data = pd.read_pickle(args.file)
+        elif args.file.removesuffix('.gzip').endswith('.parquet'):
+            data = pd.read_parquet(args.file)
         else:
             parser.error('Unsupported file extension for file', args.file)
 
