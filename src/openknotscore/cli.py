@@ -80,7 +80,7 @@ def run_cli():
         elif args.file.removesuffix('.gzip').endswith('.parquet'):
             data = pd.read_parquet(args.file)
         else:
-            parser.error('Unsupported file extension for file', args.file)
+            parser.error(f'Unsupported file extension for file {args.file}')
 
         print(f'{datetime.now()} Importing...')
         predictor_names = list(itertools.chain.from_iterable(
