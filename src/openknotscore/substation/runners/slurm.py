@@ -102,7 +102,8 @@ class SlurmRunner(Runner):
                     config.gpu_memory,
                 )
                 for config in self.configs
-            ]
+            ],
+            True
         )
         
         print(f'{datetime.now()} Serializing tasks...')
@@ -158,7 +159,8 @@ class SlurmRunner(Runner):
                     config.gpu_memory,
                 )
                 for config in self.configs
-            ]
+            ],
+            True
         )
 
         max_runtime = 0
@@ -215,8 +217,6 @@ class SlurmRunner(Runner):
             cpus=queue.cpus,
             memory_per_node=f'{math.ceil(queue.memory/1024)}K',
             gpus=1 if queue.gpu_id != None else None,
-            gpu_cmode='shared' if queue.gpu_id != None else None,
-            # cuda_visible_devices=str(queue.gpu_id),
             export='ALL'
         )
         finished_queues.put(queue)

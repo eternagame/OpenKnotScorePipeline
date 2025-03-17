@@ -309,7 +309,8 @@ def fill_allocation(
     allocation: ComputeAllocation,
     task_buckets: dict[UtilizedResources, list[Task]],
     scheduling_priorities: list[UtilizedResources],
-    schedule: Schedule
+    schedule: Schedule,
+    exclusive_gpu: bool
 ):
     for bucket in scheduling_priorities:
         # If there's an allocation which we'd prefer to use for this type of task (eg, using a cheaper CPU allocation
@@ -319,14 +320,19 @@ def fill_allocation(
         # NB: This is imperfect (eg, it may be preferable to fill up a core that's empty for 10h with a 10h task if it takes 10h1s),
         # but its much more likely for this to be the more (cost) efficient option.
         dont_extend_runtime = get_priority_allocation_idx(bucket, schedule) < schedule.compute_configurations.index(allocation.configuration)
-        slots = slots_for_task(bucket, allocation, schedule, dont_extend_runtime)
+        real_requested_resources = replace(
+            bucket,
+            gpu_memory=allocation.configuration.gpu_memory if exclusive_gpu and bucket.gpu_memory > 0 else bucket.gpu_memory
+        )
+        slots = slots_for_task(real_requested_resources, allocation, schedule, dont_extend_runtime)
         tasks = task_buckets[bucket]
         while tasks and (queue := next(slots, None)):
             schedule_task(tasks.pop(), queue)
 
 def schedule_tasks(
     tasks: list[Task],
-    compute_configurations: list[ComputeConfiguration]
+    compute_configurations: list[ComputeConfiguration],
+    exclusive_gpu: bool
 ) -> Schedule:
     schedule = Schedule(
         [replace(config) for config in compute_configurations],
@@ -343,6 +349,6 @@ def schedule_tasks(
     for bucket in scheduling_priorities:
         while task_buckets[bucket]:
             allocation = get_new_allocation(bucket, schedule)
-            fill_allocation(allocation, task_buckets, scheduling_priorities, schedule)
+            fill_allocation(allocation, task_buckets, scheduling_priorities, schedule, exclusive_gpu)
 
     return schedule
