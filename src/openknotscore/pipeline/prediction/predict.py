@@ -39,53 +39,54 @@ class PredictionDB:
 
         self._cx = sqlite3.connect(f"{pathobj.absolute().as_uri()}?mode={cxflag}", uri=True, timeout=60)
 
-        self._cx.executescript(
-            f'''
-            CREATE TABLE IF NOT EXISTS meta (
-                key TEXT UNIQUE NOT NULL,
-                value TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS predictors (
-                id INTEGER PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS sequences (
-                id INTEGER PRIMARY KEY,
-                sequence TEXT NOT NULL,
-                hash BLOB UNIQUE NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS reactivities (
-                id INTEGER PRIMARY KEY,
-                reactivities BLOB NOT NULL,
-                hash BLOB UNIQUE NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS status (
-                id INTEGER PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS structures (
-                id INTEGER PRIMARY KEY,
-                structure TEXT NOT NULL,
-                hash BLOB UNIQUE NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS errors (
-                id INTEGER PRIMARY KEY,
-                error TEXT NOT NULL,
-                hash BLOB UNIQUE NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS predictions (
-                predictor INTEGER NOT NULL,
-                sequence INTEGER NOT NULL,
-                reactivities INTEGER NOT NULL,
-                status INTEGER NOT NULL,
-                result INTEGER
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS prediction_args ON predictions(predictor, sequence, reactivities);
-            CREATE UNIQUE INDEX IF NOT EXISTS prediction_result ON predictions(sequence, reactivities, predictor, status);
-            '''
-        )
-        self._cx.execute("INSERT INTO meta VALUES('version', '1') ON CONFLICT DO UPDATE SET value='1'")
-        self._cx.executemany('INSERT INTO status(name) VALUES (?) ON CONFLICT DO NOTHING', [(PredictionStatus.SUCCESS.value,), (PredictionStatus.FAILED.value,), (PredictionStatus.QUEUED.value,)])
+        if flag in ['w', 'c', 'n']:
+            self._cx.executescript(
+                f'''
+                CREATE TABLE IF NOT EXISTS meta (
+                    key TEXT UNIQUE NOT NULL,
+                    value TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS predictors (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS sequences (
+                    id INTEGER PRIMARY KEY,
+                    sequence TEXT NOT NULL,
+                    hash BLOB UNIQUE NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS reactivities (
+                    id INTEGER PRIMARY KEY,
+                    reactivities BLOB NOT NULL,
+                    hash BLOB UNIQUE NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS status (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS structures (
+                    id INTEGER PRIMARY KEY,
+                    structure TEXT NOT NULL,
+                    hash BLOB UNIQUE NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS errors (
+                    id INTEGER PRIMARY KEY,
+                    error TEXT NOT NULL,
+                    hash BLOB UNIQUE NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS predictions (
+                    predictor INTEGER NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    reactivities INTEGER NOT NULL,
+                    status INTEGER NOT NULL,
+                    result INTEGER
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS prediction_args ON predictions(predictor, sequence, reactivities);
+                CREATE UNIQUE INDEX IF NOT EXISTS prediction_result ON predictions(sequence, reactivities, predictor, status);
+                '''
+            )
+            self._cx.execute("INSERT INTO meta VALUES('version', '1') ON CONFLICT DO UPDATE SET value='1'")
+            self._cx.executemany('INSERT INTO status(name) VALUES (?) ON CONFLICT DO NOTHING', [(PredictionStatus.SUCCESS.value,), (PredictionStatus.FAILED.value,), (PredictionStatus.QUEUED.value,)])
 
     def __enter__(self):
         return self
@@ -319,7 +320,23 @@ def flush_predictions(db_path: str):
 
 deferred = dict[str, Deferred]()
 
+found_incomplete_prediction = False
+
 def predict(predictor: Predictor, seq: str, reactivities: list[float], db_path: str):
+    global found_incomplete_prediction
+    # So far, this process has only encountered predictions that have already been completed.
+    # This means it's also possible that this prediction has already been run (eg because we're
+    # resuming a job that was preempted). Check to see if this is the case.
+    if not found_incomplete_prediction:
+        with PredictionDB(db_path, 'r') as db:
+            statuses = [db.curr_status(predname, seq, reactivities) for predname in predictor.prediction_names]
+            if all(status == PredictionStatus.SUCCESS or status == PredictionStatus.FAILED for status in statuses):
+                # It's already run. Continue to the next prediction
+                return
+            else:
+                # Not run yet - run all predictions from here on out
+                found_incomplete_prediction = True
+
     try:
         predictions = predictor.run(seq, reactivities)
         for (name, pred) in predictions.items():
