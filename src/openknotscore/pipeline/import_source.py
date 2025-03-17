@@ -97,7 +97,9 @@ def load_rdat(source_file: str):
                 reads = int(sequence.annotations.get('reads')[0])
             signal_to_noise = sequence.annotations.get('signal_to_noise')[0]
             snr = float(sequence.annotations.get('signal_to_noise')[0].split(":")[1])
-            warning = sequence.annotations.get('warning', '-')[0]
+            warning = None
+            if 'warning' in sequence.annotations:
+                warning = sequence.annotations.get('warning')[0]
             if score_start_idx is None:
                 score_start_idx = BLANK_OUT5 + 1
             if score_end_idx is None:
