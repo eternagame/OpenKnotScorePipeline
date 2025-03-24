@@ -302,10 +302,11 @@ def run_cli():
             def getOKSperRow(row):
                 # Missing or failed structures should not be considered as candidates
                 tags = [tag for tag in prediction_names if not pd.isna(row[tag])]
-                return scoring.calculateOpenKnotScore(row, tags)
+                oks = scoring.calculateOpenKnotScore(row, tags)
+                return oks if oks is not None else {}
 
             tqdm.pandas(desc="Calculating OpenKnotScore")
-            oks = data.progress_apply(getOKSperRow,axis=1)
+            oks = data.progress_apply(getOKSperRow,axis=1,result_type='expand')
             data = pd.merge(data,oks,how="left",left_index=True,right_index=True)
 
             data = data.rename(columns={c: c+'_PRED' for c in prediction_names})
