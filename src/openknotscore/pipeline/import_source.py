@@ -79,6 +79,7 @@ def load_rdat(source_file: str):
             title = None
             score_start_idx = None
             score_end_idx = None
+            eterna_author = None
             if 'Eterna' in sequence.annotations:
                 for annot in sequence.annotations.get('Eterna'):
                     if annot.startswith('id:'):
@@ -89,6 +90,8 @@ def load_rdat(source_file: str):
                         score_start_idx = int(annot.removeprefix('score:start_idx:'))
                     if annot.startswith('score:end_idx:'):
                         score_end_idx = int(annot.removeprefix('score:end_idx:'))
+                    if annot.startswith('author:'):
+                        eterna_author = annot.removeprefix('author:')
             if title is None:
                 title = sequence.annotations.get('name')[0]
             seq = sequence.annotations.get('sequence')[0]
@@ -126,6 +129,7 @@ def load_rdat(source_file: str):
             # Create a dataframe from this row
             row = {
                 'eterna_id': eterna_id,
+                'eterna_author': eterna_author,
                 'title': title,
                 'sequence': seq,
                 'reads': reads,
