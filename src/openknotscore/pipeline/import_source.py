@@ -7,6 +7,7 @@ import rdat_kit
 from arnie.utils import convert_bp_list_to_dotbracket, convert_dotbracket_to_bp_list
 
 SourceDef = str | TypedDict('SourceDef', {'path': str, 'extensions': dict[str, Any]})
+ExtSourceDef = str | TypedDict('ExtSourceDef', {'path': str, 'merge_on': list[str]})
 
 def load_sources(source_defs: SourceDef | list[SourceDef]) -> pd.DataFrame:
     '''
@@ -30,23 +31,22 @@ def load_sources(source_defs: SourceDef | list[SourceDef]) -> pd.DataFrame:
             dfs.append(df)
     return pd.concat(dfs, ignore_index=True)
 
-def load_extension_sources(source_globs: str | list[str], df: pd.DataFrame) -> pd.DataFrame:
+def load_extension_sources(source_defs: ExtSourceDef | list[ExtSourceDef], df: pd.DataFrame) -> pd.DataFrame:
     '''
     Reads source files and merges into an existing dataframe
     '''
 
-    _source_globs = [source_globs] if type(source_globs) == str else source_globs
-    source_files = list(itertools.chain.from_iterable(glob.glob(source) for source in _source_globs))
+    source_defs = source_defs if type(source_defs) == list else [source_defs]
+    source_defs = [source if type(source) == dict else {'path': source, 'merge_on': ['eterna_id']} for source in source_defs]
 
-    for source in source_files:
-        if not source.lower().endswith('csv'):
-            raise ValueError(f'Invalid file extension for source file {source} - only csv is supported')
-
-    for source in source_files:
-        extension = load_csv(source)
-        df.update(
-            df[['eterna_id']].merge(extension, on=['eterna_id'], how='left')
-        )
+    for source in source_defs:
+        for source_file in glob.glob(source['path']):
+            if not source_file.lower().endswith('csv'):
+                raise ValueError(f'Invalid file extension for source file {source_file} - only csv is supported')
+            extension = load_csv(source_file)
+            df.update(
+                df[source['merge_on']].merge(extension, on=source['merge_on'], how='left')
+            )
     
     return df
 
