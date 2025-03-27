@@ -41,9 +41,9 @@ def load_extension_sources(source_defs: ExtSourceDef | list[ExtSourceDef], df: p
 
     for source in source_defs:
         for source_file in glob.glob(source['path']):
-            if not source_file.lower().endswith('csv'):
+            if not source_file.lower().endswith(('csv', 'tsv')):
                 raise ValueError(f'Invalid file extension for source file {source_file} - only csv is supported')
-            extension = load_csv(source_file)
+            extension = load_csv(source_file, sep=',' if source_file.lower().endswith('csv') else '\t')
             df.update(
                 df[source['merge_on']].merge(extension, on=source['merge_on'], how='left')
             )
@@ -166,8 +166,8 @@ def get_global_blank_out(construct):
 
     return (BLANK_OUT5, BLANK_OUT3)
 
-def load_csv(source_file: str):
-    df = pd.read_csv(source_file)
+def load_csv(source_file: str, sep=','):
+    df = pd.read_csv(source_file, sep=sep)
     df = df[[col for col in df.columns if col in ['eterna_id', 'score_start_idx', 'score_end_idx']]]
     df['eterna_id'] = df['eterna_id'].astype(str)
 
