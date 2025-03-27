@@ -168,7 +168,8 @@ def get_global_blank_out(construct):
 
 def load_csv(source_file: str, sep=','):
     df = pd.read_csv(source_file, sep=sep)
-    df = df[[col for col in df.columns if col in ['eterna_id', 'score_start_idx', 'score_end_idx']]]
-    df['eterna_id'] = df['eterna_id'].astype(str)
+    df = df[[col for col in df.columns if not col.startswith('Unnamed:')]]
+    if 'eterna_id' in df.columns:
+        df['eterna_id'] = df['eterna_id'].astype(str)
 
     return df
