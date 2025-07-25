@@ -173,7 +173,9 @@ def run_cli():
                     else:
                         for sequence, reactivity in data[['sequence', 'reactivity']].itertuples(False):
                             if all(
-                                preddb.curr_status(name, sequence, reactivity) == PredictionStatus.SUCCESS
+                                preddb.curr_status(name, sequence, reactivity) in (
+                                    [PredictionStatus.SUCCESS, PredictionStatus.FAILED] if args.skip_failed else [PredictionStatus.SUCCESS]
+                                )
                                 for name in predictor.prediction_names
                             ): continue
                             resources = predictor.approximate_resources(sequence)
