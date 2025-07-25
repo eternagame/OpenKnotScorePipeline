@@ -284,6 +284,28 @@ class PredictionDB:
         )) as cur:
             return {predictor: structure for (predictor, structure) in cur.fetchall()}
 
+    def get_prediction_complete(self, sequence: str, reactivities: list[float], nonreactive_predictors: list[str], reactive_predictors: list[str]):
+        with closing(self._cx.execute(
+            f'''
+            SELECT predictors.name
+            FROM
+                predictions
+                LEFT JOIN errors on errors.id=predictions.result
+                LEFT JOIN predictors on predictors.id=predictions.predictor
+            WHERE
+                status in (SELECT id FROM status WHERE name in (?, ?))
+                AND sequence=(SELECT id FROM sequences WHERE hash=?)
+                AND (
+                    (
+                        predictor in (SELECT id FROM predictors WHERE name in ({','.join('?'*len(reactive_predictors))}))
+                        AND reactivities=(SELECT id FROM reactivities WHERE hash=?)
+                    ) OR predictor in (SELECT id FROM predictors WHERE name in ({','.join('?'*len(nonreactive_predictors))}))
+                )
+            ''',
+            (PredictionStatus.SUCCESS.value, PredictionStatus.FAILED.value, xxh3_64_digest(sequence), *reactive_predictors, xxh3_64_digest(pickle.dumps(reactivities)), *nonreactive_predictors)
+        )) as cur:
+            return {predictor: True for (predictor,) in cur.fetchall()}
+
     def get_prediction_success(self, sequence: str, reactivities: list[float], nonreactive_predictors: list[str], reactive_predictors: list[str]):
         with closing(self._cx.execute(
             f'''

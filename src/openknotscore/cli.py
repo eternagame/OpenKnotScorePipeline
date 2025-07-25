@@ -150,16 +150,32 @@ def run_cli():
         if args.cmd == 'predict-forecast' or args.cmd == 'predict':
             print(f'{datetime.now()} Generating tasks...')
             pred_tasks = []
+
+            nonreactive_predictors = [
+                predictor for predictor in config.enabled_predictors
+                if not predictor.uses_experimental_reactivities
+            ]
+            nonreactive_prediction_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in nonreactive_predictors
+            ))
+            reactive_predictors = [
+                predictor for predictor in config.enabled_predictors
+                if predictor.uses_experimental_reactivities
+            ]
+            reactive_prediction_names = list(itertools.chain.from_iterable(
+                predictor.prediction_names for predictor in reactive_predictors
+            ))
+            prediction_names = [*nonreactive_prediction_names, *reactive_prediction_names]
+
             with PredictionDB(pred_db_path, 'c') as preddb:
-                for predictor in config.enabled_predictors:
-                    if not predictor.uses_experimental_reactivities:
-                        for sequence in data['sequence'].unique():
-                            if all(
-                                preddb.curr_status(name, sequence, None) in (
-                                    [PredictionStatus.SUCCESS, PredictionStatus.FAILED] if args.skip_failed else [PredictionStatus.SUCCESS]
-                                )
-                                for name in predictor.prediction_names
-                            ): continue
+                for sequence in data['sequence'].unique():
+                    completed = preddb.get_prediction_complete(
+                        sequence, None, nonreactive_prediction_names, []
+                    ) if args.skip_failed else preddb.get_prediction_success(
+                        sequence, None, nonreactive_prediction_names, []
+                    )
+                    for predictor in nonreactive_predictors:
+                        if not all(name in completed for name in predictor.prediction_names):
                             resources = predictor.approximate_resources(sequence)
                             resources.max_runtime = math.ceil(resources.max_runtime * config.runtime_buffer)
                             resources.memory = math.ceil(resources.memory * config.memory_buffer)
@@ -170,14 +186,14 @@ def run_cli():
                                     resources
                                 )
                             )
-                    else:
-                        for sequence, reactivity in data[['sequence', 'reactivity']].itertuples(False):
-                            if all(
-                                preddb.curr_status(name, sequence, reactivity) in (
-                                    [PredictionStatus.SUCCESS, PredictionStatus.FAILED] if args.skip_failed else [PredictionStatus.SUCCESS]
-                                )
-                                for name in predictor.prediction_names
-                            ): continue
+                for sequence, reactivity in data[['sequence', 'reactivity']].itertuples(False):
+                    completed = preddb.get_prediction_complete(
+                        sequence, reactivity, reactive_prediction_names, []
+                    ) if args.skip_failed else preddb.get_prediction_success(
+                        sequence, reactivity, reactive_prediction_names, []
+                    )
+                    for predictor in reactive_predictors:
+                        if not all(name in completed for name in predictor.prediction_names):
                             resources = predictor.approximate_resources(sequence)
                             resources.max_runtime = math.ceil(resources.max_runtime * config.runtime_buffer)
                             resources.memory = math.ceil(resources.memory * config.memory_buffer)
