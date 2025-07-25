@@ -39,7 +39,11 @@ class PredictionDB:
 
         self._cx = sqlite3.connect(f"{pathobj.absolute().as_uri()}?mode={cxflag}", uri=True, timeout=60)
 
-        if flag in ['w', 'c', 'n']:
+        VERSION = '1'
+        if flag in ['w', 'c', 'n'] and (
+            self._cx.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="meta"').fetchone() is None
+            or (self._cx.execute('SELECT value from meta where key="version"').fetchone() or ('0',))[0] != VERSION
+        ):
             self._cx.executescript(
                 f'''
                 CREATE TABLE IF NOT EXISTS meta (
@@ -85,7 +89,7 @@ class PredictionDB:
                 CREATE UNIQUE INDEX IF NOT EXISTS prediction_result ON predictions(sequence, reactivities, predictor, status);
                 '''
             )
-            self._cx.execute("INSERT INTO meta VALUES('version', '1') ON CONFLICT DO UPDATE SET value='1'")
+            self._cx.execute("INSERT INTO meta VALUES('version', ?) ON CONFLICT DO UPDATE SET value=?", (VERSION, VERSION))
             self._cx.executemany('INSERT INTO status(name) VALUES (?) ON CONFLICT DO NOTHING', [(PredictionStatus.SUCCESS.value,), (PredictionStatus.FAILED.value,), (PredictionStatus.QUEUED.value,)])
 
     def __enter__(self):
@@ -121,7 +125,7 @@ class PredictionDB:
         hash_cache = dict[int, bytes]()
         name_cache = set()
 
-        for (predictor, sequence, reactivities) in inputs:
+        for (idx, (predictor, sequence, reactivities)) in enumerate(inputs):
             for name in predictor.prediction_names:
                 if not name in name_cache:
                     self._cx.execute('INSERT INTO predictors(name) VALUES(?) ON CONFLICT DO NOTHING', (name,)).close()
@@ -150,11 +154,14 @@ class PredictionDB:
                     (name, sequence_hash, reactivities_hash, PredictionStatus.QUEUED.value, PredictionStatus.QUEUED.value),
                 ).close()
 
+            if idx % 2500 == 0:
+                self._cx.commit()
+
     def upsert_success(self, inputs: Iterable[tuple[str, str, list[float], str]], override: bool):
         hash_cache = dict[int, bytes]()
         name_cache = set()
 
-        for (predictor, sequence, reactivities, structure) in inputs:
+        for (idx, (predictor, sequence, reactivities, structure)) in enumerate(inputs):
             if not predictor in name_cache:
                 self._cx.execute('INSERT INTO predictors(name) VALUES(?) ON CONFLICT DO NOTHING', (predictor,)).close()
                 name_cache.add(predictor)
@@ -201,6 +208,9 @@ class PredictionDB:
                     ''',
                     (predictor, sequence_hash, reactivities_hash, structure_hash, PredictionStatus.SUCCESS.value, PredictionStatus.SUCCESS.value, structure_hash, PredictionStatus.QUEUED.value),
                 ).close()
+        
+            if idx % 2500 == 0:
+                self._cx.commit()
 
     def update_success(self, predictor: str, sequence: str, reactivities: list[float], structure: str):
         structure_hash = xxh3_64_digest(structure)

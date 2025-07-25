@@ -127,6 +127,10 @@ class SlurmRunner(Runner):
             if init_script: cmds.insert(0, init_script)
 
             max_runtime = self.config_max_runtime(comp_config, self.configs[schedule.compute_configurations.index(comp_config)].runtime_buffer)
+
+            if on_queue:
+                on_queue(itertools.chain.from_iterable(alloc.tasks() for alloc in allocations[0:array_size]))
+
             sbatch(
                 cmds,
                 f'{job_name}-{idx+1}' if len(schedule.nonempty_compute_configurations()) > 1 else job_name,
@@ -142,10 +146,6 @@ class SlurmRunner(Runner):
                 echo_cmd=True,
                 nodes=1,
             )
-            
-            if on_queue:
-                on_queue(itertools.chain.from_iterable(alloc.tasks() for alloc in allocations[0:array_size]))
-
 
     def forecast(self, tasks):        
         schedule: Schedule = schedule_tasks(
