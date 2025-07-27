@@ -188,9 +188,9 @@ def run_cli():
                             )
                 for sequence, reactivity in data[['sequence', 'reactivity']].itertuples(False):
                     completed = preddb.get_prediction_complete(
-                        sequence, reactivity, reactive_prediction_names, []
+                        sequence, reactivity, [], reactive_prediction_names
                     ) if args.skip_failed else preddb.get_prediction_success(
-                        sequence, reactivity, reactive_prediction_names, []
+                        sequence, reactivity, [], reactive_prediction_names
                     )
                     for predictor in reactive_predictors:
                         if not all(name in completed for name in predictor.prediction_names):
