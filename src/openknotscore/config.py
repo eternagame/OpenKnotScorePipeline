@@ -26,6 +26,8 @@ class RDATOutput(OutputConfig):
     def write(self, df: pd.DataFrame, config: 'OKSPConfig'):
         os.makedirs(self.output_dir, exist_ok=True)
 
+        df_indexed = df.set_index('sequence')
+
         source_defs = config.source_files
         source_defs = source_defs if type(source_defs) == list else [source_defs]
         source_defs = [source if type(source) == dict else {'path': source, 'extensions': {}} for source in source_defs]
@@ -69,7 +71,10 @@ class RDATOutput(OutputConfig):
                     
                     # There may be no processed data (OKS, predictions) associated with the sequence
                     # if the sequence had low-quality or missing reactivity data, so we skip those rows
-                    row = df[df['sequence'] == seq]
+                    try:
+                        row = df_indexed.loc[[seq]]
+                    except KeyError:
+                        continue
                     row = row[row['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3)]
                     row = row.squeeze()
                     if row.empty:
