@@ -79,6 +79,8 @@ class RDATOutput(OutputConfig):
                     row = row.squeeze()
                     if row.empty:
                         continue
+                    if isinstance(row, pd.DataFrame) and len(row) > 1:
+                        row = row.iloc[0]
 
                     # Add annotations with the processed data to the RDAT
                     annotationList.append(f"score:ensemble_openknot_score:{row['ensemble_OKS']:.6f}")
