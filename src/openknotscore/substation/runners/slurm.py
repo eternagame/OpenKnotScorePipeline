@@ -145,7 +145,7 @@ class SlurmRunner(Runner):
                 memory_per_node=f'{self.config_max_memory(comp_config)//1024}K',
                 constraint=slurm_config.constraints,
                 mail_type='END',
-                array=f'0-{array_size-1}{('%' + slurm_config.max_concurrent) if slurm_config.max_concurrent else ''}' if array_size > 1 else None,
+                array=f'0-{array_size-1}{('%' + str(slurm_config.max_concurrent)) if slurm_config.max_concurrent else ''}' if array_size > 1 else None,
                 echo_cmd=True,
                 nodes=1,
             )
