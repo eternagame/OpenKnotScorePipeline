@@ -30,6 +30,7 @@ class SlurmConfig:
     constraints: str = None
     init_script: str = None
     runtime_buffer: int = 0
+    max_concurrent: int = None
 
 @dataclass
 class SlurmRunner(Runner):
@@ -112,6 +113,8 @@ class SlurmRunner(Runner):
         print(f'{datetime.now()} Submitting batches...')
         allocated_jobs = 0
         for idx, comp_config in enumerate(schedule.nonempty_compute_configurations()):
+            slurm_config = self.configs[schedule.compute_configurations.index(comp_config)]
+
             if allocated_jobs >= self.max_jobs:
                 break
 
@@ -123,10 +126,10 @@ class SlurmRunner(Runner):
             cmds = [
                 f'python -c "from openknotscore.substation.runners.slurm import SlurmRunner; SlurmRunner.run_serialized_allocation(\'{dbpath}\', {comp_config.id}, {'$SLURM_ARRAY_TASK_ID' if array_size > 1 else 0})"'
             ]
-            init_script = self.configs[schedule.compute_configurations.index(comp_config)].init_script
+            init_script = slurm_config.init_script
             if init_script: cmds.insert(0, init_script)
 
-            max_runtime = self.config_max_runtime(comp_config, self.configs[schedule.compute_configurations.index(comp_config)].runtime_buffer)
+            max_runtime = self.config_max_runtime(comp_config, slurm_config.runtime_buffer)
 
             if on_queue:
                 on_queue(itertools.chain.from_iterable(alloc.tasks() for alloc in allocations[0:array_size]))
@@ -136,13 +139,13 @@ class SlurmRunner(Runner):
                 f'{job_name}-{idx+1}' if len(schedule.nonempty_compute_configurations()) > 1 else job_name,
                 path.join(self.db_path, f'slurm-logs'),
                 timeout=f'{max_runtime // 60}:{max_runtime % 60}',
-                partition=self.configs[schedule.compute_configurations.index(comp_config)].partitions,
-                cpus=self.config_max_cpus(comp_config, self.configs[schedule.compute_configurations.index(comp_config)].max_mem_per_core, with_memory_overage=False),
+                partition=slurm_config.partitions,
+                cpus=self.config_max_cpus(comp_config, slurm_config.max_mem_per_core, with_memory_overage=False),
                 gpus=max_gpus if max_gpus > 0 else None,
                 memory_per_node=f'{self.config_max_memory(comp_config)//1024}K',
-                constraint=self.configs[schedule.compute_configurations.index(comp_config)].constraints,
+                constraint=slurm_config.constraints,
                 mail_type='END',
-                array=f'0-{array_size-1}' if array_size > 1 else None,
+                array=f'0-{array_size-1}{('%' + slurm_config.max_concurrent) if slurm_config.max_concurrent else ''}' if array_size > 1 else None,
                 echo_cmd=True,
                 nodes=1,
             )
