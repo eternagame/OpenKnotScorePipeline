@@ -19,7 +19,7 @@ class OutputConfig:
         pass
 
 class RDATOutput(OutputConfig):
-    def __init__(self, output_dir: str, max_per_rdat: int = None):
+    def __init__(self, output_dir: str, max_per_rdat: int | None = None):
         self.output_dir = output_dir
         self.max_per_rdat = max_per_rdat
 
@@ -42,7 +42,8 @@ class RDATOutput(OutputConfig):
             with open(source, 'r') as f:
                 rdat.load(f)
             for construct in rdat.constructs.values():
-                for sequence in construct.data:
+                skipped = []
+                for (idx, sequence) in enumerate(construct.data):
                     BLANK_OUT5, BLANK_OUT3 = get_global_blank_out(construct)
 
                     seq = sequence.annotations["sequence"][0]
@@ -74,10 +75,12 @@ class RDATOutput(OutputConfig):
                     try:
                         row = df_indexed.loc[[seq]]
                     except KeyError:
+                        skipped.append(idx)
                         continue
                     row = row[row['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3)]
                     row = row.squeeze()
                     if row.empty:
+                        skipped.append(idx)
                         continue
                     if isinstance(row, pd.DataFrame) and len(row) > 1:
                         row = row.iloc[0]
@@ -93,6 +96,10 @@ class RDATOutput(OutputConfig):
                     if row.get('ensemble_tags'): annotationList.append(f"best_fit:tags:{','.join(row['ensemble_tags'])}")
                     if row.get('ensemble_structures'): annotationList.append(f"best_fit:structures:{','.join(row['ensemble_structures'])}")
                     if row.get('ensemble_structures_ecs'): annotationList.append(f"best_fit:eterna_classic_scores:{','.join([f'{v:.6f}' for v in row['ensemble_structures_ecs']])}")
+                for idx in sorted(skipped, reverse=True):
+                    del construct.data[idx]
+                    del rdat.values[idx]
+                    del rdat.errors[idx]
             
             tempout = tempfile.NamedTemporaryFile(delete=False)
             tempout.close()
