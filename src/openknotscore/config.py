@@ -41,7 +41,7 @@ class RDATOutput(OutputConfig):
             rdat = rdat_kit.RDATFile()
             with open(source, 'r') as f:
                 rdat.load(f)
-            for construct in rdat.constructs.values():
+            for (construct_name, construct) in rdat.constructs.items():
                 skipped = []
                 for (idx, sequence) in enumerate(construct.data):
                     BLANK_OUT5, BLANK_OUT3 = get_global_blank_out(construct)
@@ -98,8 +98,8 @@ class RDATOutput(OutputConfig):
                     if row.get('ensemble_structures_ecs'): annotationList.append(f"best_fit:eterna_classic_scores:{','.join([f'{v:.6f}' for v in row['ensemble_structures_ecs']])}")
                 for idx in sorted(skipped, reverse=True):
                     del construct.data[idx]
-                    del rdat.values[idx]
-                    del rdat.errors[idx]
+                    del rdat.values[construct_name][idx]
+                    del rdat.errors[construct_name][idx]
             
             tempout = tempfile.NamedTemporaryFile(delete=False)
             tempout.close()
