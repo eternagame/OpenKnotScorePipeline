@@ -77,7 +77,7 @@ class RDATOutput(OutputConfig):
                     except KeyError:
                         skipped.append(idx)
                         continue
-                    row = row[row['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + sequence.values + [None]*BLANK_OUT3)]
+                    row = row[row['reactivity'].apply(lambda x: x==[None]*BLANK_OUT5 + [val if not math.isnan(val) else None for val in sequence.values] + [None]*BLANK_OUT3)]
                     row = row.squeeze()
                     if row.empty:
                         skipped.append(idx)
