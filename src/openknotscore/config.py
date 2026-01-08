@@ -85,7 +85,6 @@ class RDATOutput(OutputConfig):
                     if isinstance(row, pd.DataFrame) and len(row) > 1:
                         row = row.iloc[0]
                     if pd.isna(row.get('ensemble_OKS')):
-                        skipped.append(idx)
                         continue
 
                     # Add annotations with the processed data to the RDAT
